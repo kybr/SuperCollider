@@ -3,7 +3,11 @@
 a [Raku][] module that mimics the [SuperCollider][] language
 
 
-```raku
+```Raku
+use lib 'lib';
+use SuperCollider;
+
+
 SynthDef("simple", -> $out, $freq = 800, $sustain = 1, $amp = 0.9 {
   Out.ar($out,
     SinOsc.ar($freq, 0, 0.2) * Line.kr($amp, 0, $sustain, doneAction => Done.freeSelf)
@@ -12,6 +16,22 @@ SynthDef("simple", -> $out, $freq = 800, $sustain = 1, $amp = 0.9 {
 
 my $a = Synth("simple");
 ```
+
+Compare that to the [SuperCollider][] user code:
+
+```SuperCollider
+(
+SynthDef(\simple, { |out, freq = 800, sustain = 1, amp = 0.9|
+  Out.ar(out,
+    SinOsc.ar(freq, 0, 0.2) * Line.kr(amp, 0, sustain, doneAction: Done.freeSelf)
+  )
+}).add;
+
+a = Synth(\simple);
+)
+```
+
+
 
 Where the [SuperCollider][] syntax cannot be or should not be mimicked, we chose a reasonable way to do it the [Raku][] way.
 
