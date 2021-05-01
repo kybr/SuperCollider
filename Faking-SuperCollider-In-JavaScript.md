@@ -77,8 +77,7 @@ SuperCollider has a bunch of operators, so you will have to do something about t
 
 
 
-\* What is a _prelude_? It is just all the support code you would need to make a snippet work. For instance, in the most recent listing above, we must define all the objects/functions: `SynthDef`, `Out`, `Synth`, etc. We know from inspecting the code that `SynthDef` is a function that takes a string and a function definition and returns something with an `.add()` method. `Line` is a thing with a method `kr(...)` that accepts a combination of positional and named arguments (where the latter are implemented as object blocks `{...}`).
-
+\* What is a _prelude_? It is just all the support code you would need to make a snippet work. For instance, in the most recent listing above, we must define all the objects/functions: `SynthDef`, `Out`, `Synth`, etc. We know from inspecting the code that `SynthDef` is a function that takes a string and a function definition and returns something with an `.add()` method. `Line` is a thing with a method `kr(...)` that accepts a combination of positional and named arguments (where the latter are implemented as object blocks `{...}`). Find an example here: <https://github.com/kybr/SuperCollider/blob/main/experiment/supercollider.js>.
 
 
 I started a project to make SuperCollider work as Raku: <https://github.com/kybr/SuperCollider>. As you can see, Raku is _very_ close to SuperCollider already. Raku supports operator overloading, so the operators will not be a problem. You can see that I am willing to deviate from the SuperCollider language. If I wanted to make pure SuperCollider code work, I could write a SuperCollider [grammar](https://docs.raku.org/language/grammars) in Raku.
