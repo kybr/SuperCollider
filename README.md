@@ -29,6 +29,24 @@ a = Synth(\simple);
 )
 ```
 
+```Raku
+{
+  my $x = SinOsc.ar(MouseX.kr(1, 100));
+  SinOsc.ar(300 * $x + 800, 0, 0.1)
+  +
+  PinkNoise.ar(0.1 * $x + 0.1)
+}.play;
+```
+Compare to:
+```SuperCollider
+{
+  var x = SinOsc.ar(MouseX.kr(1, 100));
+  SinOsc.ar(300 * x + 800, 0, 0.1)
+  +
+  PinkNoise.ar(0.1 * x + 0.1)
+}.play;
+```
+
 
 
 Where the [SuperCollider][] syntax cannot be or should not be mimicked, we chose a reasonable way to do it the [Raku][] way.
@@ -36,7 +54,7 @@ Where the [SuperCollider][] syntax cannot be or should not be mimicked, we chose
 
 ## Why?
 
-This is a fun experiment. Learning [Raku][], I noticed that it has syntax (and a flexibility of syntax) in common with [SuperCollder][]. The two languages feature sets overlap to some degree.
+This is a fun experiment. Learning [Raku][], I noticed that it has syntax (and a flexibility of syntax) in common with [SuperCollider][]. The two languages feature sets overlap to some degree.
 
 My hunch is that [SuperCollider][] user code with minimal changes will compile and run as [Raku][]. I do not intend to complete the entire SuperCollider class/type system, just the unit generators, SynthDef, Synth, and code that supports them.
 
