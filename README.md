@@ -4,9 +4,7 @@ a [Raku][] module that mimics the [SuperCollider][] language
 
 
 ```Raku
-use lib 'lib';
 use SuperCollider;
-
 
 SynthDef("simple", -> $out, $freq = 800, $sustain = 1, $amp = 0.9 {
   Out.ar($out,
