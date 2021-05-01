@@ -2,9 +2,9 @@
 
 
 
+To Jack.
 
-
-So, you want to implement the SuperCollider language in JavaScript? First, try mimicry. Take a snippet of SuperCollider, a little piece of code, and try to run it in a JavaScript interpreter. When it fails to compile, think why and then create a prelude (an initial set of functions, classes, constants, and variables)\* that might make the SuperCollider code work, as is. For instance, look at this code and think what it might take to compile it as JavaScript:
+So, you want to implement the SuperCollider language in JavaScript? First, try mimicry. Take a snippet of SuperCollider, a little piece of code, and try to run it in a JavaScript interpreter. When it fails to compile, think why and then create a prelude\* that might make the SuperCollider code work, as is. For instance, look at the code below and think what it might take to compile it as JavaScript:
 
 ```SuperCollider
 (
@@ -18,7 +18,7 @@ a = Synth(\simple);
 )
 ```
 
-If (when) this process fails, you have a choice. 1) You can start to change the SuperCollider code minimally so that it is actually valid JavaScript and not valid SuperCollider---Here, you are letting go of your dream to some degree. You will ask every one of your users to make these changes to their SuperCollider code when moving to your system. Or, 2) You can write a SuperCollider interpreter in JavaScript. Start with the Lex and Yacc specification in the SuperCollider repository and port this to a [PEG.js](https://pegjs.org/) grammar. This is going to be a lot of work, but it might be a better choice if you do not already know JavaScript.
+If (when) this process fails, you have a choice. 1) You can start to change the SuperCollider code minimally so that it is actually valid JavaScript and not valid SuperCollider---Here, you are letting go of your dream to some degree. You will ask your users to make these changes to their SuperCollider code when moving to your system. Or, 2) You can write a SuperCollider interpreter in JavaScript. Start with the Lex and Yacc specification in the SuperCollider repository and port this to a [PEG.js](https://pegjs.org/) grammar. This is going to be a lot of work, but it might be a better choice if you do not already know JavaScript.
 
 There is a third option. JavaScript is insanely flexible. There are libraries that let you extend the JavaScript language in ways that might help you compile SuperCollider as-is. Here are some links in that vein:
 
