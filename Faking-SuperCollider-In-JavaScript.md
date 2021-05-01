@@ -38,7 +38,7 @@ Here is a somewhat changed listing. It is no longer valid SuperCollider; It is _
 
 
 ```js
-(
+{
 SynthDef("simple", (out, freq = 800, sustain = 1, amp = 0.9) => {
   return Out.ar(out,
     SinOsc.ar(freq, 0, 0.2) * Line.kr(amp, 0, sustain, {doneAction: Done.freeSelf})
@@ -46,10 +46,11 @@ SynthDef("simple", (out, freq = 800, sustain = 1, amp = 0.9) => {
 }).add();
 
 a = Synth("simple");
-)
+}
 ```
 
 
+0. change code block from `(...)` to `{...}`
 1. `\simple` cannot work in vanilla JavaScript; Just use a `"string"` which is still valid in SuperCollider
 2. `|list, of, args|` becomes `(list, of, args) => {...}`
 3. You have to explicitly say `return` to return something in JavaScript
