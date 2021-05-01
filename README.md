@@ -13,6 +13,13 @@ SynthDef("simple", -> $out, $freq = 800, $sustain = 1, $amp = 0.9 {
 }).add;
 
 my $a = Synth("simple");
+
+{
+  my $x = SinOsc.ar(MouseX.kr(1, 100));
+  SinOsc.ar(300 * $x + 800, 0, 0.1)
+  +
+  PinkNoise.ar(0.1 * $x + 0.1)
+}.play;
 ```
 
 Compare that to the [SuperCollider][] user code:
@@ -26,27 +33,15 @@ SynthDef(\simple, { |out, freq = 800, sustain = 1, amp = 0.9|
 }).add;
 
 a = Synth(\simple);
-)
-```
 
-```Raku
-{
-  my $x = SinOsc.ar(MouseX.kr(1, 100));
-  SinOsc.ar(300 * $x + 800, 0, 0.1)
-  +
-  PinkNoise.ar(0.1 * $x + 0.1)
-}.play;
-```
-Compare to:
-```SuperCollider
 {
   var x = SinOsc.ar(MouseX.kr(1, 100));
   SinOsc.ar(300 * x + 800, 0, 0.1)
   +
   PinkNoise.ar(0.1 * x + 0.1)
 }.play;
+)
 ```
-
 
 
 Where the [SuperCollider][] syntax cannot be or should not be mimicked, we chose a reasonable way to do it the [Raku][] way.
