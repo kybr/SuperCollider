@@ -21,7 +21,7 @@ let Line = {
 }
 
 let Done = { freeSelf: 0 }
-let Synth = (name) => {}
+let Synth = (name) => { console.log("got here") }
 
 // SuperCollider-like code
 //
@@ -34,3 +34,5 @@ SynthDef("simple", (out, freq = 800, sustain = 1, amp = 0.9) => {
 
 a = Synth("simple");
 }
+
+
