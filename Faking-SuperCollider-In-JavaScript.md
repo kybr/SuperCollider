@@ -62,7 +62,7 @@ There's still a big problem. There's no operator overloading in JavaScript, so t
 
 
 ```js
-(
+{
 SynthDef("simple", (out, freq = 800, sustain = 1, amp = 0.9) => {
   return Out.ar(out,
     BinOp('*', SinOsc.ar(freq, 0, 0.2), Line.kr(amp, 0, sustain, {doneAction: Done.freeSelf}))
@@ -70,7 +70,7 @@ SynthDef("simple", (out, freq = 800, sustain = 1, amp = 0.9) => {
 }).add();
 
 a = Synth("simple");
-)
+}
 ```
 
 SuperCollider has a bunch of operators, so you will have to do something about that.
