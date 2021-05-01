@@ -62,6 +62,10 @@ I admire the capabilities of [SuperCollider][], but I would much rather invest m
 Everything is stubs. It "runs" but it does not do anything useful. It is currently just a way to expose the similarities and differencies between [Raku][] and [SuperCollider][].
 
 
+## Notes
+
+It is necessary to [augment](https://docs.raku.org/syntax/augment) Block in order to get the frequently-used `{...}.play` syntax. Also, serveral useful functions are methods of numbers (e.g., `60.midicps`) and those must be injected as well.
+
 
 [Raku]: https://raku.org/
 [SuperCollider]: https://supercollider.github.io/
