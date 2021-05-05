@@ -1,12 +1,17 @@
 module SuperCollider {
 
-#
-# Framework Code
-#
+#| http://doc.sccode.org/Classes/Object.html
+role Object {
 
-# parent class for all Unit Generators
-#
-class Node {}
+}
+#= https://github.com/supercollider/supercollider/blob/develop/SCClassLibrary/Common/Core/Object.sc
+
+#| http://doc.sccode.org/Classes/AbstractFunction.html
+role AbstractFunction does Object {}
+#= https://github.com/supercollider/supercollider/blob/develop/SCClassLibrary/Common/Core/AbstractFunction.sc
+
+
+class Ugen does AbstractFunction {}
 
 
 # recipe for building a synth
@@ -62,14 +67,14 @@ class Synth is export {
 }
 
 
-class Out is Node is export {
+class Out is Ugen is export {
   has Int $.bus;
-  has Node $.node; # channelsArray
+  has Ugen $.node; # channelsArray
 
 # https://doc.sccode.org/Classes/Out.html
 
-  method ar($bus, $node) {
-    Out.new: :$bus, :$node
+  method ar(|c) {
+    # Out.new: c
   }
 
   submethod BUILD {
@@ -78,7 +83,7 @@ class Out is Node is export {
 }
 
 
-class SinOsc is Node is export {
+class SinOsc is Ugen is export {
 
 # https://doc.sccode.org/Classes/SinOsc.html
 
@@ -91,7 +96,7 @@ class SinOsc is Node is export {
 }
 
 
-class Line is Node is export {
+class Line is Ugen is export {
   method kr($start = 0.0, $end = 1.0, $dur = 1.0, $mul = 1.0, $add = 0.0, $doneAction = 0) {
     Line.new
   }
@@ -100,7 +105,7 @@ class Line is Node is export {
 }
 
 
-class MouseX is Node is export {
+class MouseX is Ugen is export {
   # http://doc.sccode.org/Classes/MouseX.html
 
   method kr(|c) {
@@ -112,7 +117,7 @@ class MouseX is Node is export {
 }
 
 
-class PinkNoise is Node is export {
+class PinkNoise is Ugen is export {
   # http://doc.sccode.org/Classes/PinkNoise.html
 
   method ar(|c) {
@@ -136,7 +141,7 @@ class Done is export {
 # handling operators among Nodes
 #
 
-class BinOp is Node is export {
+class BinOp is Ugen is export {
   has Str $.op;
   has $.left;
   has $.right;
@@ -148,27 +153,27 @@ class BinOp is Node is export {
 }
 
 
-multi sub infix:<*>(Node $left, Node $right --> BinOp) is export {
+multi sub infix:<*>(Ugen $left, Ugen $right --> BinOp) is export {
   BinOp.new: op => '*', :$left, :$right
 }
 
-multi sub infix:<*>(Numeric $left, Node $right --> BinOp) is export {
+multi sub infix:<*>(Numeric $left, Ugen $right --> BinOp) is export {
   BinOp.new: op => '*', :$left, :$right
 }
 
-multi sub infix:<*>(Node $left, Numeric $right --> BinOp) is export {
+multi sub infix:<*>(Ugen $left, Numeric $right --> BinOp) is export {
   BinOp.new: op => '*', :$left, :$right
 }
 
-multi sub infix:<+>(Node $left, Node $right --> BinOp) is export {
+multi sub infix:<+>(Ugen $left, Ugen $right --> BinOp) is export {
   BinOp.new: op => '+', :$left, :$right
 }
 
-multi sub infix:<+>(Numeric $left, Node $right --> BinOp) is export {
+multi sub infix:<+>(Numeric $left, Ugen $right --> BinOp) is export {
   BinOp.new: op => '+', :$left, :$right
 }
 
-multi sub infix:<+>(Node $left, Numeric $right --> BinOp) is export {
+multi sub infix:<+>(Ugen $left, Numeric $right --> BinOp) is export {
   BinOp.new: op => '+', :$left, :$right
 }
 
@@ -177,8 +182,12 @@ multi sub infix:<+>(Node $left, Numeric $right --> BinOp) is export {
 # functions
 #
 
-multi rrand($low = 0, $high = 1) is export {
+multi rrand($low, $high) is export {
   return ($high - $low).rand + $low;
+}
+
+multi rrand($high = 1) is export {
+    $high.rand
 }
 
 
@@ -202,7 +211,7 @@ augment class Block {
     my $t = self.();
 
     # 2. check the return type
-    if $t ~~ Node {
+    if $t ~~ Ugen {
       "we got a Node".say
     }
 
@@ -216,5 +225,6 @@ augment class Block {
     
   }
 }
+
 
 }

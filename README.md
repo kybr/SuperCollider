@@ -69,6 +69,22 @@ Everything is stubs. It "runs" but it does not do anything useful. It is current
 It is necessary to [augment](https://docs.raku.org/syntax/augment) Block in order to get the frequently-used `{...}.play` syntax. Also, serveral useful functions are methods of numbers (e.g., `60.midicps`) and those must be injected as well.
 
 
+#### positional after optional
+
+```Raku
+my $graph = -> $out, $freq = 440, $dur = 0.5, $amp = 0.6 { };
+```
+
+> Cannot put positional parameter $dur after an optional parameter
+
+Comma gives us this linting message. 
+We get the error above when writing the unit generator graph function (UGGF?) we hand to the SynthDef. This is fine (I think) because the default values are there to be 
+
+
+
+
+
+
 [Raku]: https://raku.org/
 [SuperCollider]: https://supercollider.github.io/
 
