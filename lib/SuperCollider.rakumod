@@ -1,52 +1,70 @@
 module SuperCollider {
 
 #| http://doc.sccode.org/Classes/Object.html
-role Object {
-
-}
+role Object { }
 #= https://github.com/supercollider/supercollider/blob/develop/SCClassLibrary/Common/Core/Object.sc
 
 #| http://doc.sccode.org/Classes/AbstractFunction.html
-role AbstractFunction does Object {}
+role AbstractFunction does Object { }
 #= https://github.com/supercollider/supercollider/blob/develop/SCClassLibrary/Common/Core/AbstractFunction.sc
 
-
-class Ugen does AbstractFunction {}
-
+#| https://doc.sccode.org/Classes/UGen.html
+class Ugen does AbstractFunction { }
+#= https://github.com/supercollider/supercollider/blob/develop/SCClassLibrary/Common/Audio/UGen.sc
 
 # recipe for building a synth
 #
 class SynthDef is export {
   has Str $!name;  # the name of this definition
-  has Block $!block; # execute to construct an audio graph
+  has Block $!graph; # execute to construct an audio graph
 
   # make is so you can construct with a simple SynthDef(...)
   #
-  method CALL-ME($name, $block) {
-    SynthDef.new: :$name, :$block
+  method CALL-ME($name, $graph) {
+    SynthDef.new: :$name, :$graph
   }
 
-  submethod BUILD(:$!name, :$!block) {
+  submethod BUILD(:$!name, :$!graph) {
     self.raku.say;
     say $!name;
 
-    # fail if $block does not return a Node? Array?
-    $!block.returns.say;
+    # fail if $graph does not return a Node? Array?
+    $!graph.returns.say;
 
-    # note the signature of the block; we need that to design the proxy object
-    $!block.signature.raku.say;
+    # note the signature of the graph; we need that to design the proxy object
+    $!graph.signature.raku.say;
+  }
+
+  method compileDataStructure {
+    # Use the given graph (a Raku Block) to construct a SynthDef data structure.
+    # It is a binary format described here:
+    #   https://doc.sccode.org/Reference/Synth-Definition-File-Format.html
+    # We might do this by executing the given block and inspecting the result or
+    # perhaps we can use introspection to inspect the given block and build the
+    # binary from that. How does SuperCollider do it? What is the more Raku way
+    # to do it? Perhaps a Grammar?
   }
 
   method add {
-    "calling the synthdef block...".say;
+    "calling the synthdef graph...".say;
 
-    $!block(0) # call the block
+    $!graph(0); # call the graph
 
     # this should maybe...
     # - return a binary data structure
     # - code-gen a per-sample function
     # - ?
+
+    self
   }
+}
+
+multi add(SynthDef $s) is export {
+  $s.add
+}
+
+sub synthdef($name, $graph) is export {
+  SynthDef.new: :$name, :$graph
 }
 
 
@@ -66,6 +84,11 @@ class Synth is export {
   }
 }
 
+sub synth($name) is export {
+  Synth.new: :$name
+}
+
+#
 
 class Out is Ugen is export {
   has Int $.bus;
