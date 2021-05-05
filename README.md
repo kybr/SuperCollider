@@ -24,6 +24,25 @@ my $a = Synth("simple");
 }
 ```
 
+or
+
+```Raku
+{
+add synthdef "simple", -> $out, $freq = 800, $sustain = 1, $amp = 0.9 {
+  Out.ar: $out, SinOsc.ar($freq, 0, 0.2) * Line.kr($amp, 0, $sustain, doneAction => Done.freeSelf)
+};
+
+my $a = synth "simple";
+
+play {
+  my $x = SinOsc.ar: MouseX.kr(1, 100);
+  SinOsc.ar(300 * $x + 800, 0, 0.1)
+  +
+  PinkNoise.ar(0.1 * $x + 0.1)
+}
+}
+```
+
 Compare that to the [SuperCollider][] user code:
 
 ```SuperCollider
