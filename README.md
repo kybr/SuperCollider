@@ -1,6 +1,6 @@
 # SuperCollider
 
-a [Raku][] module that mimics the [SuperCollider][] language
+a [Raku][] client for the [SuperCollider][] server.
 
 
 ```Raku
