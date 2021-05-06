@@ -9,8 +9,20 @@ role AbstractFunction does Object { }
 #= https://github.com/supercollider/supercollider/blob/develop/SCClassLibrary/Common/Core/AbstractFunction.sc
 
 #| https://doc.sccode.org/Classes/UGen.html
-class UGen does AbstractFunction { }
+class UGen {
+    has $.name;
+    has $.value;
+    has $.rate; # simple numbers have rate 'ir'?
+    #has $.position; # ???
+    has %.inputs; # no inputs or simple number inputs means leaf node
+}
 #= https://github.com/supercollider/supercollider/blob/develop/SCClassLibrary/Common/Audio/UGen.sc
+
+#| https://doc.sccode.org/Classes/Control.html
+#| https://doc.sccode.org/Classes/AudioControl.html
+#| https://doc.sccode.org/Classes/NamedControl.html
+class Control is UGen { }
+
 
 # recipe for building a synth
 #
@@ -40,24 +52,41 @@ class SynthDef is export {
     self.raku.say;
     say $!name;
 
-    # fail if $graph does not return a Node? Array?
+    # fail if graph does not return a Node? Array?
     $!graph.returns.say;
 
     # note the signature of the graph; we need that to design the proxy object
     $!graph.signature.raku.say;
+
+    # this should maybe...
+    # - return a binary data structure
+    # - code-gen a per-sample function
+    # - ?
 
   }
 
   method add {
     "calling the synthdef graph...".say;
 
-    say $!graph.raku;
-    say $!graph(0); # call the graph
-
-    # this should maybe...
-    # - return a binary data structure
-    # - code-gen a per-sample function
-    # - ?
+    #say $!graph.raku;
+    my %hash;
+    my @list;
+    for $!graph.signature.params {
+        if .positional {
+           @list.push: Control.new(
+                   :name(.usage-name),
+                   :value(.default ~~ Block ?? .default.() !! Any));
+        }
+        elsif .named {
+            %hash{.usage-name} = Control.new(
+                    :name(.usage-name),
+                    :value(.default ~~ Block ?? .default.() !! Any));
+        }
+    }
+    my $capture = Capture.new: :@list, :%hash;
+    $capture.raku.say;
+    my $structure = $!graph(|$capture); # call the graph
+    say $structure;
 
     self
   }
@@ -96,7 +125,7 @@ sub synth($name) is export {
 # Unit Generators
 #
 
-sub controls(Signature $signature, Capture $capture) {
+sub inputs(Signature $signature, Capture $capture) {
   my %hash;
 
   # the names and defaults
@@ -118,62 +147,69 @@ sub controls(Signature $signature, Capture $capture) {
   %hash
 }
 
+sub ugen($name, $rate, :$value, :%inputs) {
+    UGen.new: :$name, :$rate, :$value, :%inputs
+}
 
 #| https://doc.sccode.org/Classes/Out.html
 class Out is UGen is export {
   proto defaults($bus, $channelsArray) { }
-  method ar(|capture) { ('Out', 'ar', controls(&defaults.signature, capture)) }
-  method kr(|capture) { ('Out', 'kr', controls(&defaults.signature, capture)) }
+  method ar(|capture) { ugen('Out', 'ar', inputs => inputs(&defaults.signature, capture)) }
+  method kr(|capture) { ugen('Out', 'kr', inputs => inputs(&defaults.signature, capture)) }
 }
 
 #| https://doc.sccode.org/Classes/SinOsc.html
 class SinOsc is UGen is export {
   proto defaults($freq = 440.0, $phase = 0.0, $mul = 1.0, $add = 0.0) { }
-  method ar(|capture) { ('SinOsc', 'ar', controls(&defaults.signature, capture)) }
-  method kr(|capture) { ('SinOsc', 'kr', controls(&defaults.signature, capture)) }
+  method ar(|capture) { ugen('SinOsc', 'ar', inputs => inputs(&defaults.signature, capture)) }
+  method kr(|capture) { ugen('SinOsc', 'kr', inputs => inputs(&defaults.signature, capture)) }
 }
 
 
 #| https://doc.sccode.org/Classes/Line.html
 class Line is UGen is export {
   proto defaults($start = 0.0, $end = 1.0, $dur = 1.0, $mul = 1.0, $add = 0.0, $doneAction = 0) { }
-  method ar(|capture) { ('Line', 'ar', controls(&defaults.signature, capture)) }
-  method kr(|capture) { ('Line', 'kr', controls(&defaults.signature, capture)) }
+  method ar(|capture) { ugen('Line', 'ar', inputs => inputs(&defaults.signature, capture)) }
+  method kr(|capture) { ugen('Line', 'kr', inputs => inputs(&defaults.signature, capture)) }
 }
 
 
 #| http://doc.sccode.org/Classes/MouseX.html
 class MouseX is UGen is export {
   proto defaults($minval = 0, $maxval = 1, $warp = 0, $lag = 0.2) { }
-  method kr(|capture) { ('MouseX', 'kr', controls(&defaults.signature, capture)) }
+  method kr(|capture) { ugen('MouseX', 'kr', inputs => inputs(&defaults.signature, capture)) }
 }
 
 
 #| http://doc.sccode.org/Classes/PinkNoise.html
 class PinkNoise is UGen is export {
   proto defaults($mul = 0, $add = 0.2) { }
-  method ar(|capture) { ('PinkNoise', 'ar', controls(&defaults.signature, capture)) }
-  method kr(|capture) { ('PinkNoise', 'kr', controls(&defaults.signature, capture)) }
+  method ar(|capture) { ugen('PinkNoise', 'ar', inputs => inputs(&defaults.signature, capture)) }
+  method kr(|capture) { ugen('PinkNoise', 'kr', inputs => inputs(&defaults.signature, capture)) }
 }
 
 #| http://doc.sccode.org/Classes/Done.html
+#| how does Done work? does something automatically hook done up to the ugen it is passed to?
 class Done is UGen is export {
-  method none { ('Done', 0) } #do nothing when the UGen is finished
-  method pauseSelf { ('Done', 1) } #pause the enclosing synth, but do not free it
-  method freeSelf { ('Done', 2) } #free the enclosing synth
-  method freeSelfAndPrev { ('Done', 3) } #free both this synth and the preceding node
-  method freeSelfAndNext { ('Done', 4) } #free both this synth and the following node
-  method freeSelfAndFreeAllInPrev { ('Done', 5) } #free this synth; if the preceding node is a group then do g_freeAll on it, else free it
-  method freeSelfAndFreeAllInNext { ('Done', 6) } #free this synth; if the following node is a group then do g_freeAll on it, else free it
-  method freeSelfToHead { ('Done', 7) } #free this synth and all preceding nodes in this group
-  method freeSelfToTail { ('Done', 8) } #free this synth and all following nodes in this group
-  method freeSelfPausePrev { ('Done', 9) } #free this synth and pause the preceding node
-  method freeSelfPauseNext { ('Done', 10) } #free this synth and pause the following node
-  method freeSelfAndDeepFreePrev { ('Done', 11) } #free this synth and if the preceding node is a group then do g_deepFree on it, else free it
-  method freeSelfAndDeepFreeNext { ('Done', 12) } #free this synth and if the following node is a group then do g_deepFree on it, else free it
-  method freeAllInGroup { ('Done', 13) } #free this synth and all other nodes in this group (before and after)
-  method freeGroup { ('Done', 14) } #free the enclosing group and all nodes within it (including this synth)
-  method freeSelfResumeNext { ('Done', 15) } #free this synth and resume the following node
+    method ugen($value) {
+        UGen.new: name => 'Done', rate => 'kr', :$value
+    }
+    method none { self.ugen(0) } # do nothing when the UGen is finished
+    method pauseSelf { self.ugen(1) } # pause the enclosing synth, but do not free it
+    method freeSelf { self.ugen(2) } # free the enclosing synth
+    method freeSelfAndPrev { self.ugen(3) } # free both this synth and the preceding node
+    method freeSelfAndNext { self.ugen(4) } # free both this synth and the following node
+    method freeSelfAndFreeAllInPrev { self.ugen(5) } # free this synth; if the preceding node is a group then do g_freeAll on it, else free it
+    method freeSelfAndFreeAllInNext { self.ugen(6) } # free this synth; if the following node is a group then do g_freeAll on it, else free it
+    method freeSelfToHead { self.ugen(7) } # free this synth and all preceding nodes in this group
+    method freeSelfToTail { self.ugen(8) } # free this synth and all following nodes in this group
+    method freeSelfPausePrev { self.ugen(9) } # free this synth and pause the preceding node
+    method freeSelfPauseNext { self.ugen(10) } # free this synth and pause the following node
+    method freeSelfAndDeepFreePrev { self.ugen(11) } # free this synth and if the preceding node is a group then do g_deepFree on it, else free it
+    method freeSelfAndDeepFreeNext { self.ugen(12) } # free this synth and if the following node is a group then do g_deepFree on it, else free it
+    method freeAllInGroup { self.ugen(13) } # free this synth and all other nodes in this group (before and after)
+    method freeGroup { self.ugen(14) } # free the enclosing group and all nodes within it (including this synth)
+    method freeSelfResumeNext { self.ugen(15) } # free this synth and resume the following node
 }
 
 
@@ -183,31 +219,32 @@ class Done is UGen is export {
 
 class BinaryOpUGen is UGen is export {
   proto defaults($selector, $a, $b) { }
-  method make(|capture) { ('BinaryOpUGen', '??', controls(&defaults.signature, capture)) }
+  # what is the rate of a BinaryOpUGen?
+  method make(|capture) { ugen('BinaryOpUGen', '??', inputs => inputs(&defaults.signature, capture)) }
 }
 
 
-multi sub infix:<*>(UGen $a, UGen $b --> BinaryOpUGen) is export {
+multi sub infix:<*>(UGen $a, UGen $b) is export {
   BinaryOpUGen.make('*', $a, $b)
 }
 
-multi sub infix:<*>(Numeric $a, UGen $b --> BinaryOpUGen) is export {
+multi sub infix:<*>(Numeric $a, UGen $b) is export {
   BinaryOpUGen.make('*', $a, $b)
 }
 
-multi sub infix:<*>(UGen $a, Numeric $b --> BinaryOpUGen) is export {
+multi sub infix:<*>(UGen $a, Numeric $b) is export {
   BinaryOpUGen.make('*', $a, $b)
 }
 
-multi sub infix:<+>(UGen $a, UGen $b --> BinaryOpUGen) is export {
+multi sub infix:<+>(UGen $a, UGen $b) is export {
   BinaryOpUGen.make('*', $a, $b)
 }
 
-multi sub infix:<+>(Numeric $a, UGen $b --> BinaryOpUGen) is export {
+multi sub infix:<+>(Numeric $a, UGen $b) is export {
   BinaryOpUGen.make('*', $a, $b)
 }
 
-multi sub infix:<+>(UGen $a, Numeric $b --> BinaryOpUGen) is export {
+multi sub infix:<+>(UGen $a, Numeric $b) is export {
   BinaryOpUGen.make('*', $a, $b)
 }
 
