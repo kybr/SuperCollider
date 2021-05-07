@@ -10,11 +10,23 @@ role AbstractFunction does Object { }
 
 #| https://doc.sccode.org/Classes/UGen.html
 class UGen {
+    has $.type;
+    has $.rate; # simple numbers have rate 'ir'?
+    has %.inputs; # no inputs or simple number inputs means leaf node
+
+    #has $.position; # ???
     has $.name;
     has $.value;
-    has $.rate; # simple numbers have rate 'ir'?
-    #has $.position; # ???
-    has %.inputs; # no inputs or simple number inputs means leaf node
+
+    method make($rate, %inputs) {
+        # remove the module name from the class name
+        my $type = self.^name.split('::')[*-1];
+        UGen.new: :$type, :$rate, :%inputs
+    }
+
+    method ar(%inputs) { self.make('ar', %inputs) }
+    method kr(%inputs) { self.make('kr', %inputs) }
+    method ir(%inputs) { self.make('ir', %inputs) }
 }
 #= https://github.com/supercollider/supercollider/blob/develop/SCClassLibrary/Common/Audio/UGen.sc
 
@@ -126,25 +138,31 @@ sub synth($name) is export {
 #
 
 sub inputs(Signature $signature, Capture $capture) {
-  my %hash;
+    my %hash;
 
-  # the names and defaults
-  for $signature.params {
-    if .default ~~ Block {
-      %hash{.usage-name} = .default.();
+    # the names and defaults
+    for $signature.params {
+        if .default ~~ Block {
+            %hash{.usage-name} = .default.();
+        }
+        else {
+            # XXX what to do?
+        }
     }
-  }
 
-  for $capture.pairs {
-    if .key ~~ Int {
-      %hash{ $signature.params[.key].usage-name } = .value
+    for $capture.pairs {
+        if .key ~~ Int {
+            my $key = $signature.params[.key].usage-name;
+            # XXX handle out-of-bounds positional
+            %hash{$key} = .value
+        }
+        if .key ~~ Str {
+            # XXX handle passing unknown parameter
+            %hash{.key} = .value
+        }
     }
-    if .key ~~ Str {
-      %hash{ .key } = .value
-    }
-  }
 
-  %hash
+    %hash
 }
 
 sub ugen($name, $rate, :$value, :%inputs) {
@@ -154,38 +172,38 @@ sub ugen($name, $rate, :$value, :%inputs) {
 #| https://doc.sccode.org/Classes/Out.html
 class Out is UGen is export {
   proto defaults($bus, $channelsArray) { }
-  method ar(|capture) { ugen('Out', 'ar', inputs => inputs(&defaults.signature, capture)) }
-  method kr(|capture) { ugen('Out', 'kr', inputs => inputs(&defaults.signature, capture)) }
+  method ar(|capture) { callwith(inputs(&defaults.signature, capture)) }
+  method kr(|capture) { callwith(inputs(&defaults.signature, capture)) }
 }
 
 #| https://doc.sccode.org/Classes/SinOsc.html
 class SinOsc is UGen is export {
   proto defaults($freq = 440.0, $phase = 0.0, $mul = 1.0, $add = 0.0) { }
-  method ar(|capture) { ugen('SinOsc', 'ar', inputs => inputs(&defaults.signature, capture)) }
-  method kr(|capture) { ugen('SinOsc', 'kr', inputs => inputs(&defaults.signature, capture)) }
+  method ar(|capture) { callwith(inputs(&defaults.signature, capture)) }
+  method kr(|capture) { callwith(inputs(&defaults.signature, capture)) }
 }
 
 
 #| https://doc.sccode.org/Classes/Line.html
 class Line is UGen is export {
   proto defaults($start = 0.0, $end = 1.0, $dur = 1.0, $mul = 1.0, $add = 0.0, $doneAction = 0) { }
-  method ar(|capture) { ugen('Line', 'ar', inputs => inputs(&defaults.signature, capture)) }
-  method kr(|capture) { ugen('Line', 'kr', inputs => inputs(&defaults.signature, capture)) }
+  method ar(|capture) { callwith(inputs(&defaults.signature, capture)) }
+  method kr(|capture) { callwith(inputs(&defaults.signature, capture)) }
 }
 
 
 #| http://doc.sccode.org/Classes/MouseX.html
 class MouseX is UGen is export {
   proto defaults($minval = 0, $maxval = 1, $warp = 0, $lag = 0.2) { }
-  method kr(|capture) { ugen('MouseX', 'kr', inputs => inputs(&defaults.signature, capture)) }
+  method kr(|capture) { callwith(inputs(&defaults.signature, capture)) }
 }
 
 
 #| http://doc.sccode.org/Classes/PinkNoise.html
 class PinkNoise is UGen is export {
   proto defaults($mul = 0, $add = 0.2) { }
-  method ar(|capture) { ugen('PinkNoise', 'ar', inputs => inputs(&defaults.signature, capture)) }
-  method kr(|capture) { ugen('PinkNoise', 'kr', inputs => inputs(&defaults.signature, capture)) }
+  method ar(|capture) { callwith(inputs(&defaults.signature, capture)) }
+  method kr(|capture) { callwith(inputs(&defaults.signature, capture)) }
 }
 
 #| http://doc.sccode.org/Classes/Done.html

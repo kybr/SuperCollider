@@ -33,3 +33,21 @@
     Child.my-name().say;
     say so Child.my-name() ~~ 'Child';
 }
+say "=====================================";
+{
+    my class Parent {
+        method my-name($str) {
+            say "#### $str";
+            self.^name;
+        }
+    }
+
+    my class Child is Parent {
+        method my-name(|c) {
+            callwith("This is the child")
+            }
+    }
+
+    Child.my-name().say;
+    #say so Child.my-name() ~~ 'Child';
+}
