@@ -1,0 +1,21 @@
+{
+  "name": "SuperCollider",
+  "description": "a SuperCollider client for Raku",
+  "version": "0.1",
+  "perl": "6.*",
+  "authors": [
+    "Karl Yerkes"
+  ],
+  "auth": "Write me!",
+  "depends": [],
+  "build-depends": [],
+  "test-depends": [],
+  "provides": {},
+  "resources": [],
+  "license": "Artistic-2.0",
+  "source-url": "https://github.com/kybr/SuperCollider.git",
+  "tags": [
+    "music",
+    "Open Sound Control"
+  ]
+}

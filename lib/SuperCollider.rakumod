@@ -18,15 +18,39 @@ class UGen {
     has $.name;
     has $.value;
 
-    method make($rate, %inputs) {
+    method make(Str $rate, Signature $signature, Capture $capture) {
+        my %inputs;
+
+        # the names and defaults
+        for $signature.params {
+            if .default ~~ Block {
+                %inputs{.usage-name} = .default.();
+            }
+            else {
+                # XXX what to do?
+            }
+        }
+
+        for $capture.pairs {
+            if .key ~~ Int {
+                my $key = $signature.params[.key].usage-name;
+                # XXX handle out-of-bounds positional
+                %inputs{$key} = .value
+            }
+            if .key ~~ Str {
+                # XXX handle passing unknown parameter
+                %inputs{.key} = .value
+            }
+        }
+
         # remove the module name from the class name
         my $type = self.^name.split('::')[*-1];
         UGen.new: :$type, :$rate, :%inputs
     }
 
-    method ar(%inputs) { self.make('ar', %inputs) }
-    method kr(%inputs) { self.make('kr', %inputs) }
-    method ir(%inputs) { self.make('ir', %inputs) }
+    method ar($s, |c) { self.make('ar', $s, c) }
+    method kr($s, |c) { self.make('kr', $s, c) }
+    method ir($s, |c) { self.make('ir', $s, c) }
 }
 #= https://github.com/supercollider/supercollider/blob/develop/SCClassLibrary/Common/Audio/UGen.sc
 
@@ -137,73 +161,42 @@ sub synth($name) is export {
 # Unit Generators
 #
 
-sub inputs(Signature $signature, Capture $capture) {
-    my %hash;
-
-    # the names and defaults
-    for $signature.params {
-        if .default ~~ Block {
-            %hash{.usage-name} = .default.();
-        }
-        else {
-            # XXX what to do?
-        }
-    }
-
-    for $capture.pairs {
-        if .key ~~ Int {
-            my $key = $signature.params[.key].usage-name;
-            # XXX handle out-of-bounds positional
-            %hash{$key} = .value
-        }
-        if .key ~~ Str {
-            # XXX handle passing unknown parameter
-            %hash{.key} = .value
-        }
-    }
-
-    %hash
-}
-
-sub ugen($name, $rate, :$value, :%inputs) {
-    UGen.new: :$name, :$rate, :$value, :%inputs
-}
 
 #| https://doc.sccode.org/Classes/Out.html
 class Out is UGen is export {
-  proto defaults($bus, $channelsArray) { }
-  method ar(|capture) { callwith(inputs(&defaults.signature, capture)) }
-  method kr(|capture) { callwith(inputs(&defaults.signature, capture)) }
+  proto inputs($bus, $channelsArray) { }
+  method ar(|c) { callwith(&inputs.signature, c) }
+  method kr(|c) { callwith(&inputs.signature, c) }
 }
 
 #| https://doc.sccode.org/Classes/SinOsc.html
 class SinOsc is UGen is export {
-  proto defaults($freq = 440.0, $phase = 0.0, $mul = 1.0, $add = 0.0) { }
-  method ar(|capture) { callwith(inputs(&defaults.signature, capture)) }
-  method kr(|capture) { callwith(inputs(&defaults.signature, capture)) }
+  proto inputs($freq = 440.0, $phase = 0.0, $mul = 1.0, $add = 0.0) { }
+  method ar(|c) { callwith(&inputs.signature, c) }
+  method kr(|c) { callwith(&inputs.signature, c) }
 }
 
 
 #| https://doc.sccode.org/Classes/Line.html
 class Line is UGen is export {
-  proto defaults($start = 0.0, $end = 1.0, $dur = 1.0, $mul = 1.0, $add = 0.0, $doneAction = 0) { }
-  method ar(|capture) { callwith(inputs(&defaults.signature, capture)) }
-  method kr(|capture) { callwith(inputs(&defaults.signature, capture)) }
+  proto inputs($start = 0.0, $end = 1.0, $dur = 1.0, $mul = 1.0, $add = 0.0, $doneAction = 0) { }
+  method ar(|c) { callwith(&inputs.signature, c) }
+  method kr(|c) { callwith(&inputs.signature, c) }
 }
 
 
 #| http://doc.sccode.org/Classes/MouseX.html
 class MouseX is UGen is export {
-  proto defaults($minval = 0, $maxval = 1, $warp = 0, $lag = 0.2) { }
-  method kr(|capture) { callwith(inputs(&defaults.signature, capture)) }
+  proto inputs($minval = 0, $maxval = 1, $warp = 0, $lag = 0.2) { }
+  method kr(|c) { callwith(&inputs.signature, c) }
 }
 
 
 #| http://doc.sccode.org/Classes/PinkNoise.html
 class PinkNoise is UGen is export {
-  proto defaults($mul = 0, $add = 0.2) { }
-  method ar(|capture) { callwith(inputs(&defaults.signature, capture)) }
-  method kr(|capture) { callwith(inputs(&defaults.signature, capture)) }
+  proto inputs($mul = 0, $add = 0.2) { }
+  method ar(|c) { callwith(&inputs.signature, c) }
+  method kr(|c) { callwith(&inputs.signature, c) }
 }
 
 #| http://doc.sccode.org/Classes/Done.html
@@ -236,9 +229,9 @@ class Done is UGen is export {
 #
 
 class BinaryOpUGen is UGen is export {
-  proto defaults($selector, $a, $b) { }
+  proto inputs($selector, $a, $b) { }
+  method make(|c) { callwith('??', &inputs.signature, c) }
   # what is the rate of a BinaryOpUGen?
-  method make(|capture) { ugen('BinaryOpUGen', '??', inputs => inputs(&defaults.signature, capture)) }
 }
 
 
