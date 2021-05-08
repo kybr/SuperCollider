@@ -23,25 +23,42 @@ class UGen {
 
         # the names and defaults
         for $signature.params {
+            "got {.^name} {.name} with {.default.^name}".say;
             if .default ~~ Block {
-                %inputs{.usage-name} = .default.();
+                %inputs{.usage-name} = .default.()
+            }
+            elsif .default ~~ Code {
+                # parameter does not have a default; required!
+                %inputs{.usage-name} = "required"
             }
             else {
-                # XXX what to do?
+                die "what is happening?"
             }
         }
 
         for $capture.pairs {
             if .key ~~ Int {
+                .key < $signature.params.elems or die "index {.key} is out of bounds";
                 my $key = $signature.params[.key].usage-name;
-                # XXX handle out-of-bounds positional
-                %inputs{$key} = .value
+                %inputs{$key} = .value;
+            } elsif .key ~~ Str {
+                defined %inputs{.key} or die "parameter {.key} unknown";
+                %inputs{.key} = .value;
             }
-            if .key ~~ Str {
-                # XXX handle passing unknown parameter
-                %inputs{.key} = .value
+            else {
+                die;
             }
         }
+
+        # check that all required parameters are covered
+        my $it's-all-good = True;
+        for %inputs.pairs {
+            if .value eq "required" {
+                $it's-all-good = False;
+                say "{.key} not covered";
+            }
+        }
+        $it's-all-good or die "required parameter not covered";
 
         # remove the module name from the class name
         my $type = self.^name.split('::')[*-1];
