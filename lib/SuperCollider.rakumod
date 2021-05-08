@@ -96,11 +96,43 @@ class Control is UGen { }
 #| used to represent constants; XXX what does SuperCollider do?
 class Constant is UGen { }
 
+
+sub dot(UGen $ugen, Str $output is rw) {
+  my $name = "";
+
+  with $ugen {
+    if .type {
+      $name ~= "{.type}.{.rate}"
+    }
+    else {
+      $name ~= "{.name}={.value}"
+    }
+  }
+
+  my $id = "id_" ~ 999999999.rand.Int; # instance id
+  my $declaration = "  $id [label=\"$name\"];\n";
+
+  $output ~= $declaration;
+  for $ugen.inputs.pairs {
+    my $label = "[label=\"{.key}\"]";
+    if .value ~~ UGen {
+      $output ~= "  $id -> {dot .value, $output} $label;\n";
+    }
+    else {
+      $output ~= "  $id -> \"{.value}\" $label;\n"
+    }
+  }
+
+  $id # the id of this UGen
+}
+
+
 # recipe for building a synth
 #
 class SynthDef is export {
   has Str $.name;  # the name of this definition
   has Block $.graph; # execute to construct an audio graph
+  has UGen $.structure; # evaluated graph
 
   # make is so you can construct with a simple SynthDef(...)
   #
@@ -150,13 +182,22 @@ class SynthDef is export {
     }
     my $capture = Capture.new: :@list, :%hash;
     say "calling graph with {$capture.raku}";
-    my $structure = $!graph(|$capture); # the slip (|) operator de-structures the capture
-    $structure;
+    $!structure = $!graph(|$capture); # the slip (|) operator de-structures the capture
+  }
+
+  method svg {
+    my $guts = "";
+    dot $!structure, $guts;
+    my $file-name = "/tmp/{9999999999.rand.Int}.dot";
+    my $graphviz = "digraph {$!name} \{ $guts \}";
+    spurt $file-name, $graphviz;
+    shell "dot -Tsvg $file-name > $file-name.svg";
+    shell "open -a gapplin $file-name.svg";
   }
 
   method add {
     my $structure = self.create-structure;
-    say $structure;
+    # output graphviz
     self
   }
 }
