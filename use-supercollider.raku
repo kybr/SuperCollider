@@ -59,3 +59,14 @@ say "=========================================================================="
 # * 400 + 500, 0.03, 0.003)}!2)
 # + ({RHPF.ar(OnePole.ar(BrownNoise.ar, 0.99), LPF.ar(BrownNoise.ar, 20)
 # * 800 + 1000, 0.03, 0.005)}!2) }.play
+
+# uses Done ugen explicitly
+# (
+# SynthDef("Done-help", { arg out, t_trig;
+#     var line, a, b;
+#     line= Line.kr(1,0,1);
+#     a= SinOsc.ar(440,0,0.1*line); //sound fading out
+#     b= WhiteNoise.ar(Done.kr(line)*0.1); //noise starts at end of line
+#     Out.ar(out, Pan2.ar(a+b));
+# }).add;
+# )

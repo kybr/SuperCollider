@@ -8,10 +8,14 @@ role Object { }
 role AbstractFunction does Object { }
 #= https://github.com/supercollider/supercollider/blob/develop/SCClassLibrary/Common/Core/AbstractFunction.sc
 
+
+
 #| https://doc.sccode.org/Classes/UGen.html
 class UGen {
     has $.type;
     has $.rate; # simple numbers have rate 'ir'?
+
+    # XXX consider making this an array; i think positions matter more than names
     has %.inputs; # no inputs or simple number inputs means leaf node
 
     #has $.position; # ???
@@ -21,9 +25,14 @@ class UGen {
     method make(Str $rate, Signature $signature, Capture $capture) {
         my %inputs;
 
-        # the names and defaults
+        # extract the names, order, default values / required-ness
+        # from the given signature; maybe we should pre-compute this
+        # for each UGen at start up? or perhaps cache it after one
+        # instance is created?
+        #
         for $signature.params {
-            "got {.^name} {.name} with {.default.^name}".say;
+            #"{.^name} has parameter {.name} with {.default.^name}".say;
+
             if .default ~~ Block {
                 %inputs{.usage-name} = .default.()
             }
@@ -36,6 +45,9 @@ class UGen {
             }
         }
 
+        # process the given capture looking for unknown and out of bounds
+        # parameters; Raku is amazing!
+        #
         for $capture.pairs {
             if .key ~~ Int {
                 .key < $signature.params.elems or die "index {.key} is out of bounds";
@@ -50,7 +62,8 @@ class UGen {
             }
         }
 
-        # check that all required parameters are covered
+        # check to see if there are any required parameters that were not
+        # passed; say each one.
         my $it's-all-good = True;
         for %inputs.pairs {
             if .value eq "required" {
@@ -60,22 +73,28 @@ class UGen {
         }
         $it's-all-good or die "required parameter not covered";
 
+        # XXX maybe replace any simple numbers in the inputs with Constant
+
         # remove the module name from the class name
         my $type = self.^name.split('::')[*-1];
         UGen.new: :$type, :$rate, :%inputs
     }
 
-    method ar($s, |c) { self.make('ar', $s, c) }
-    method kr($s, |c) { self.make('kr', $s, c) }
-    method ir($s, |c) { self.make('ir', $s, c) }
+    method ar($s, $c) { self.make('ar', $s, $c) }
+    method kr($s, $c) { self.make('kr', $s, $c) }
+    method ir($s, $c) { self.make('ir', $s, $c) }
 }
 #= https://github.com/supercollider/supercollider/blob/develop/SCClassLibrary/Common/Audio/UGen.sc
+
 
 #| https://doc.sccode.org/Classes/Control.html
 #| https://doc.sccode.org/Classes/AudioControl.html
 #| https://doc.sccode.org/Classes/NamedControl.html
 class Control is UGen { }
 
+
+#| used to represent constants; XXX what does SuperCollider do?
+class Constant is UGen { }
 
 # recipe for building a synth
 #
@@ -89,7 +108,16 @@ class SynthDef is export {
     SynthDef.new: :$name, :$graph
   }
 
-  method compileDataStructure {
+  method create-blob {
+    # we'll need something like this
+    my $buf = buf8.new(3, 6, 254);
+  }
+
+  method generate-c {
+    # code-gen a per-sample c function
+  }
+
+  method create-structure {
     # Use the given graph (a Raku Block) to construct a SynthDef data structure.
     # It is a binary format described here:
     #   https://doc.sccode.org/Reference/Synth-Definition-File-Format.html
@@ -100,47 +128,35 @@ class SynthDef is export {
 
     # https://en.wikipedia.org/wiki/Topological_sorting
 
-    my $buf = buf8.new(3, 6, 254);
-
-    self.raku.say;
-    say $!name;
-
     # fail if graph does not return a Node? Array?
-    $!graph.returns.say;
+    say "graph returns type {$!graph.returns.raku}";
 
     # note the signature of the graph; we need that to design the proxy object
-    $!graph.signature.raku.say;
+    say "graph signature is {$!graph.signature.raku}";
 
-    # this should maybe...
-    # - return a binary data structure
-    # - code-gen a per-sample function
-    # - ?
-
-  }
-
-  method add {
-    "calling the synthdef graph...".say;
-
-    #say $!graph.raku;
     my %hash;
     my @list;
     for $!graph.signature.params {
-        if .positional {
-           @list.push: Control.new(
-                   :name(.usage-name),
-                   :value(.default ~~ Block ?? .default.() !! Any));
-        }
-        elsif .named {
-            %hash{.usage-name} = Control.new(
-                    :name(.usage-name),
-                    :value(.default ~~ Block ?? .default.() !! Any));
-        }
+      if .positional {
+        @list.push: Control.new(
+                :name(.usage-name),
+                :value(.default ~~ Block ?? .default.() !! Any));
+      }
+      elsif .named {
+        %hash{.usage-name} = Control.new(
+                :name(.usage-name),
+                :value(.default ~~ Block ?? .default.() !! Any));
+      }
     }
     my $capture = Capture.new: :@list, :%hash;
-    $capture.raku.say;
-    my $structure = $!graph(|$capture); # call the graph
-    say $structure;
+    say "calling graph with {$capture.raku}";
+    my $structure = $!graph(|$capture); # the slip (|) operator de-structures the capture
+    $structure;
+  }
 
+  method add {
+    my $structure = self.create-structure;
+    say $structure;
     self
   }
 }
@@ -219,25 +235,27 @@ class PinkNoise is UGen is export {
 #| http://doc.sccode.org/Classes/Done.html
 #| how does Done work? does something automatically hook done up to the ugen it is passed to?
 class Done is UGen is export {
-    method ugen($value) {
-        UGen.new: name => 'Done', rate => 'kr', :$value
-    }
-    method none { self.ugen(0) } # do nothing when the UGen is finished
-    method pauseSelf { self.ugen(1) } # pause the enclosing synth, but do not free it
-    method freeSelf { self.ugen(2) } # free the enclosing synth
-    method freeSelfAndPrev { self.ugen(3) } # free both this synth and the preceding node
-    method freeSelfAndNext { self.ugen(4) } # free both this synth and the following node
-    method freeSelfAndFreeAllInPrev { self.ugen(5) } # free this synth; if the preceding node is a group then do g_freeAll on it, else free it
-    method freeSelfAndFreeAllInNext { self.ugen(6) } # free this synth; if the following node is a group then do g_freeAll on it, else free it
-    method freeSelfToHead { self.ugen(7) } # free this synth and all preceding nodes in this group
-    method freeSelfToTail { self.ugen(8) } # free this synth and all following nodes in this group
-    method freeSelfPausePrev { self.ugen(9) } # free this synth and pause the preceding node
-    method freeSelfPauseNext { self.ugen(10) } # free this synth and pause the following node
-    method freeSelfAndDeepFreePrev { self.ugen(11) } # free this synth and if the preceding node is a group then do g_deepFree on it, else free it
-    method freeSelfAndDeepFreeNext { self.ugen(12) } # free this synth and if the following node is a group then do g_deepFree on it, else free it
-    method freeAllInGroup { self.ugen(13) } # free this synth and all other nodes in this group (before and after)
-    method freeGroup { self.ugen(14) } # free the enclosing group and all nodes within it (including this synth)
-    method freeSelfResumeNext { self.ugen(15) } # free this synth and resume the following node
+  proto inputs($src) { }
+  method kr(|c) { callwith(&inputs.signature, c) }
+
+    # this next part is just a bunch of enums, basically
+    #
+    method none { 0 } # do nothing when the UGen is finished
+    method pauseSelf { 1 } # pause the enclosing synth, but do not free it
+    method freeSelf { 2 } # free the enclosing synth
+    method freeSelfAndPrev { 3 } # free both this synth and the preceding node
+    method freeSelfAndNext { 4 } # free both this synth and the following node
+    method freeSelfAndFreeAllInPrev { 5 } # free this synth; if the preceding node is a group then do g_freeAll on it, else free it
+    method freeSelfAndFreeAllInNext { 6 } # free this synth; if the following node is a group then do g_freeAll on it, else free it
+    method freeSelfToHead { 7 } # free this synth and all preceding nodes in this group
+    method freeSelfToTail { 8 } # free this synth and all following nodes in this group
+    method freeSelfPausePrev { 9 } # free this synth and pause the preceding node
+    method freeSelfPauseNext { 10 } # free this synth and pause the following node
+    method freeSelfAndDeepFreePrev { 11 } # free this synth and if the preceding node is a group then do g_deepFree on it, else free it
+    method freeSelfAndDeepFreeNext { 12 } # free this synth and if the following node is a group then do g_deepFree on it, else free it
+    method freeAllInGroup { 13 } # free this synth and all other nodes in this group (before and after)
+    method freeGroup { 14 } # free the enclosing group and all nodes within it (including this synth)
+    method freeSelfResumeNext { 15 } # free this synth and resume the following node
 }
 
 
