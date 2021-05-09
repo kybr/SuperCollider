@@ -30,6 +30,8 @@ class UGen {
     UGen.new: :$rate, :$type, :%inputs
   }
 
+  # XXX check if rate is supported!
+
   method ar(|c) { self.make('ar', c) }
   method kr(|c) { self.make('kr', c) }
   method ir(|c) { self.make('ir', c) }
@@ -104,9 +106,10 @@ sub resolve(Signature $signature, Capture $capture) {
   }
   $it's-all-good or die "required parameter not covered";
 
-  # XXX maybe replace any simple numbers in the inputs with Constant
+  # replace Numeric constants with Constant
   for %inputs.pairs {
     if .value ~~ Numeric {
+      # XXX consider a lookup so we can merge constants?
       %inputs{.key} = Constant.new:
               type => 'Constant',
               rate => 'ir',
@@ -117,27 +120,9 @@ sub resolve(Signature $signature, Capture $capture) {
   %inputs
 }
 
-#| used to represent constants; XXX what does SuperCollider do?
-#class Constant is UGen { }
-
 
 sub dot(UGen $ugen, Str $output is rw) {
   my $name = "";
-
-#  with $ugen {
-#    if .type {
-#      $name ~= "{.type}.{.rate}";
-#    }
-#    else {
-#      die "UGen without type?"
-#    }
-#    if .type ~~ 'Control' | 'Constant' {
-#      if .name {
-#        $name ~= "\n{.name}";
-#      }
-#      $name ~= .value ?? "={.value}" !! "";
-#    }
-#  }
 
   with $ugen {
     if defined .type { $name ~= "{.type}\n" }
@@ -164,8 +149,8 @@ sub dot(UGen $ugen, Str $output is rw) {
 }
 
 
-# recipe for building a synth
-#
+#| https://doc.sccode.org/Classes/SynthDef.html
+#| https://doc.sccode.org/Tutorials/Mark_Polishook_tutorial/07_SynthDefs.html
 class SynthDef is export {
   has Str $.name;  # the name of this definition
   has Block $.graph; # execute to construct an audio graph
@@ -222,7 +207,7 @@ class SynthDef is export {
       }
     }
     my $capture = Capture.new: :@list, :%hash;
-    say "calling graph with {$capture.raku}";
+    #say "calling graph with {$capture.raku}";
     $!structure = $!graph(|$capture); # the slip (|) operator de-structures the capture
   }
 
@@ -239,6 +224,7 @@ class SynthDef is export {
 
   method add {
     my $structure = self.create-structure;
+    say $structure;
     # output graphviz
     self
   }
@@ -284,6 +270,7 @@ class Out is UGen is export {
    method rates { <ar kr> }
 }
 
+
 #| https://doc.sccode.org/Classes/SinOsc.html
 class SinOsc is UGen is export {
   method inputs { :($freq = 440.0, $phase = 0.0, $mul = 1.0, $add = 0.0) }
@@ -311,13 +298,33 @@ class PinkNoise is UGen is export {
   method rates { <ar kr> }
 }
 
+#| https://doc.sccode.org/Classes/BufDur.html
+class BufDur is UGen is export {
+  method inputs { :($bufnum) }
+  method rates { <kr ir> }
+}
+
+
+#| https://doc.sccode.org/Classes/BufRateScale.html
+class BufRateScale is UGen is export {
+  method inputs { :($bufnum) }
+  method rates { <kr ir> }
+}
+
+
+#| https://doc.sccode.org/Classes/PlayBuf.html
+class PlayBuf is UGen is export {
+  method inputs { :($numChannels, $bufnum = 0, $rate = 1.0, $trigger = 1.0, $startPos = 0.0, $loop = 0.0, $doneAction = 0) }
+  method rates { <ar kr> }
+}
+
+
 #| http://doc.sccode.org/Classes/Done.html
-#| how does Done work? does something automatically hook done up to the ugen it is passed to?
 class Done is UGen is export {
   method inputs { :($src) }
   method rates { <kr> }
 
-  # this next part is just a bunch of enums, basically
+  # this next part is just a bunch of enums, basically. these are conflated into the Done class :|
   #
   method none { 0 } # do nothing when the UGen is finished
   method pauseSelf { 1 } # pause the enclosing synth, but do not free it
@@ -357,12 +364,20 @@ sub determine-rate(UGen $a, UGen $b) {
   return '??'
 }
 
-multi sub infix:<*>(UGen $a, UGen $b) is export {
+sub make-binop($op, $a, $b --> UGen) {
   given determine-rate($a, $b) {
-    when 'ar' { return BinaryOpUGen.ar('*', $a, $b) }
-    when 'kr' { return BinaryOpUGen.kr('*', $a, $b) }
-    when 'ir' { return BinaryOpUGen.ir('*', $a, $b) }
+    when 'ar' { return BinaryOpUGen.ar($op, $a, $b) }
+    when 'kr' { return BinaryOpUGen.kr($op, $a, $b) }
+    when 'ir' { return BinaryOpUGen.ir($op, $a, $b) }
   }
+}
+
+multi sub infix:<*>(UGen $a, UGen $b) is export { make-binop('*', $a, $b)}
+multi sub infix:</>(UGen $a, UGen $b) is export { make-binop('/', $a, $b)}
+multi sub infix:<+>(UGen $a, UGen $b) is export { make-binop('+', $a, $b)}
+multi sub infix:<->(UGen $a, UGen $b) is export { make-binop('-', $a, $b)}
+multi sub infix:<!>($a, $b) is export is DEPRECATED("Use Raku's xx operator instead!") {
+  $a xx $b
 }
 
 

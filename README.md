@@ -110,6 +110,12 @@ Comma gives us this linting message on SynthDef graph block parameter lists. Thi
 values are there to be inspected, so we can build a graph.
 
 
+#### Required arguments first
+
+> Cannot put required parameter $buffer after optional parameters
+> -> $rate=1, $buffer⏏, $trigger=1, $start=0, $loop=0, $amp=1,
+
+Rules for function arguments are different. SuperCollider seems to allow required arguments (ones without default values) after those that are optional. Raku does not allow that.
 
 
 
