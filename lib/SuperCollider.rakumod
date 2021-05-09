@@ -9,84 +9,30 @@ role AbstractFunction does Object { }
 #= https://github.com/supercollider/supercollider/blob/develop/SCClassLibrary/Common/Core/AbstractFunction.sc
 
 
+sub resolve(Signature $signature, Capture $capture) {...}
+
+
 #| https://doc.sccode.org/Classes/UGen.html
 class UGen {
-    has $.type;
-    has $.rate; # simple numbers have rate 'ir'?
+  has $.type;
+  has $.rate; # simple numbers have rate 'ir'?
 
-    # XXX consider making this an array; i think positions matter more than names
-    has %.inputs; # no inputs or simple number inputs means leaf node
+  # XXX consider making this an array; i think positions matter more than names
+  has %.inputs; # no inputs or simple number inputs means leaf node
 
-    #has $.position; # ???
-    has $.name;
-    has $.value;
+  #has $.position; # ???
+  has $.name;
+  has $.value;
 
-    method make(Str $rate, Signature $signature, Capture $capture) {
-        my %inputs;
+  method make($rate, $capture) {
+    my $type = self.^name.split('::')[*-1]; # remove the module name from the class name
+    my %inputs = resolve(self.inputs, $capture); # calls down to child for signature
+    UGen.new: :$rate, :$type, :%inputs
+  }
 
-        # extract the names, order, default values / required-ness
-        # from the given signature; maybe we should pre-compute this
-        # for each UGen at start up? or perhaps cache it after one
-        # instance is created?
-        #
-        for $signature.params {
-            #"{.^name} has parameter {.name} with {.default.^name}".say;
-
-            if .default ~~ Block {
-                %inputs{.usage-name} = .default.()
-            }
-            elsif .default ~~ Code {
-                # parameter does not have a default; required!
-                %inputs{.usage-name} = "required"
-            }
-            else {
-                die "what is happening?"
-            }
-        }
-
-        # process the given capture looking for unknown and out of bounds
-        # parameters; Raku is amazing!
-        #
-        for $capture.pairs {
-            if .key ~~ Int {
-                .key < $signature.params.elems or die "index {.key} is out of bounds";
-                my $key = $signature.params[.key].usage-name;
-                %inputs{$key} = .value;
-            } elsif .key ~~ Str {
-                defined %inputs{.key} or die "parameter {.key} unknown";
-                %inputs{.key} = .value;
-            }
-            else {
-                die;
-            }
-        }
-
-        # check to see if there are any required parameters that were not
-        # passed; say each one.
-        my $it's-all-good = True;
-        for %inputs.pairs {
-            if .value eq "required" {
-                $it's-all-good = False;
-                say "{.key} not covered";
-            }
-        }
-        $it's-all-good or die "required parameter not covered";
-
-        # XXX maybe replace any simple numbers in the inputs with Constant
-#        for %inputs.pairs {
-#          if .value ~~ Numeric {
-#            %inputs{.key} = Constant.new: value => .value
-#          }
-#        }
-
-        # remove the module name from the class name
-        my $type = self.^name.split('::')[*-1];
-        UGen.new: :$type, :$rate, :%inputs
-    }
-
-    method ar($s, $c) { self.make('ar', $s, $c) }
-    method kr($s, $c) { self.make('kr', $s, $c) }
-    method ir($s, $c) { self.make('ir', $s, $c) }
+  method ar(|c) { self.make('ar', c) }
+  method kr(|c) { self.make('kr', c) }
+  method ir(|c) { self.make('ir', c) }
 }
 #= https://github.com/supercollider/supercollider/blob/develop/SCClassLibrary/Common/Audio/UGen.sc
 
@@ -95,7 +41,75 @@ class UGen {
 #| https://doc.sccode.org/Classes/AudioControl.html
 #| https://doc.sccode.org/Classes/NamedControl.html
 class Control is UGen { }
+class Constant is UGen { }
 
+#| create a UGen inputs hash, resolving the call capture with the proper signature
+sub resolve(Signature $signature, Capture $capture) {
+  my %inputs;
+
+  # extract the names, order, default values / required-ness
+  # from the given signature; maybe we should pre-compute this
+  # for each UGen at start up? or perhaps cache it after one
+  # instance is created?
+  #
+  for $signature.params {
+    #"{.^name} has parameter {.name} with {.default.^name}".say;
+
+    if .default ~~ Block {
+      %inputs{.usage-name} = .default.()
+    }
+    elsif .default ~~ Code {
+      # parameter does not have a default; required!
+      %inputs{.usage-name} = "required"
+    }
+    else {
+      die "what is happening?"
+    }
+  }
+
+  # process the given capture looking for unknown and out of bounds
+  # parameters; Raku is amazing!
+  #
+  for $capture.pairs {
+    if .key ~~ Int {
+      if .key >= $signature.params.elems {
+        "trying to resolve this capture...".say;
+        $capture.raku.say;
+        "with this signature...".say;
+        $signature.raku.say;
+        die "input value {.value} passed as argument {.key} is out of bounds";
+      }
+      my $key = $signature.params[.key].usage-name;
+      %inputs{$key} = .value;
+    } elsif .key ~~ Str {
+      defined %inputs{.key} or die "parameter {.key} unknown";
+      %inputs{.key} = .value;
+    }
+    else {
+      die;
+    }
+  }
+
+  # check to see if there are any required parameters that were not
+  # passed; say each one.
+  my $it's-all-good = True;
+  for %inputs.pairs {
+    if .value eq "required" {
+      $it's-all-good = False;
+      say "{.key} not covered";
+    }
+  }
+  $it's-all-good or die "required parameter not covered";
+
+  # XXX maybe replace any simple numbers in the inputs with Constant
+  #        for %inputs.pairs {
+  #          if .value ~~ Numeric {
+  #            %inputs{.key} = Constant.new: value => .value
+  #          }
+  #        }
+
+  %inputs
+}
 
 #| used to represent constants; XXX what does SuperCollider do?
 #class Constant is UGen { }
@@ -251,65 +265,61 @@ sub synth($name) is export {
 
 #| https://doc.sccode.org/Classes/Out.html
 class Out is UGen is export {
-  proto inputs($bus, $channelsArray) { }
-  method ar(|c) { callwith(&inputs.signature, c) }
-  method kr(|c) { callwith(&inputs.signature, c) }
+   method inputs { :($bus, $channelsArray) }
+   method rates { <ar kr> }
 }
 
 #| https://doc.sccode.org/Classes/SinOsc.html
 class SinOsc is UGen is export {
-  proto inputs($freq = 440.0, $phase = 0.0, $mul = 1.0, $add = 0.0) { }
-  method ar(|c) { callwith(&inputs.signature, c) }
-  method kr(|c) { callwith(&inputs.signature, c) }
+  method inputs { :($freq = 440.0, $phase = 0.0, $mul = 1.0, $add = 0.0) }
+  method rates { <ar kr> }
 }
 
 
 #| https://doc.sccode.org/Classes/Line.html
 class Line is UGen is export {
-  proto inputs($start = 0.0, $end = 1.0, $dur = 1.0, $mul = 1.0, $add = 0.0, $doneAction = 0) { }
-  method ar(|c) { callwith(&inputs.signature, c) }
-  method kr(|c) { callwith(&inputs.signature, c) }
+  method inputs { :($start = 0.0, $end = 1.0, $dur = 1.0, $mul = 1.0, $add = 0.0, $doneAction = 0) }
+  method rates { <ar kr> }
 }
 
 
 #| http://doc.sccode.org/Classes/MouseX.html
 class MouseX is UGen is export {
-  proto inputs($minval = 0, $maxval = 1, $warp = 0, $lag = 0.2) { }
-  method kr(|c) { callwith(&inputs.signature, c) }
+  method inputs { :($minval = 0, $maxval = 1, $warp = 0, $lag = 0.2) }
+  method rates { <kr> }
 }
 
 
 #| http://doc.sccode.org/Classes/PinkNoise.html
 class PinkNoise is UGen is export {
-  proto inputs($mul = 0, $add = 0.2) { }
-  method ar(|c) { callwith(&inputs.signature, c) }
-  method kr(|c) { callwith(&inputs.signature, c) }
+  method inputs { :($mul = 0, $add = 0.2) }
+  method rates { <ar kr> }
 }
 
 #| http://doc.sccode.org/Classes/Done.html
 #| how does Done work? does something automatically hook done up to the ugen it is passed to?
 class Done is UGen is export {
-  proto inputs($src) { }
-  method kr(|c) { callwith(&inputs.signature, c) }
+  method inputs { :($src) }
+  method rates { <kr> }
 
-    # this next part is just a bunch of enums, basically
-    #
-    method none { 0 } # do nothing when the UGen is finished
-    method pauseSelf { 1 } # pause the enclosing synth, but do not free it
-    method freeSelf { 2 } # free the enclosing synth
-    method freeSelfAndPrev { 3 } # free both this synth and the preceding node
-    method freeSelfAndNext { 4 } # free both this synth and the following node
-    method freeSelfAndFreeAllInPrev { 5 } # free this synth; if the preceding node is a group then do g_freeAll on it, else free it
-    method freeSelfAndFreeAllInNext { 6 } # free this synth; if the following node is a group then do g_freeAll on it, else free it
-    method freeSelfToHead { 7 } # free this synth and all preceding nodes in this group
-    method freeSelfToTail { 8 } # free this synth and all following nodes in this group
-    method freeSelfPausePrev { 9 } # free this synth and pause the preceding node
-    method freeSelfPauseNext { 10 } # free this synth and pause the following node
-    method freeSelfAndDeepFreePrev { 11 } # free this synth and if the preceding node is a group then do g_deepFree on it, else free it
-    method freeSelfAndDeepFreeNext { 12 } # free this synth and if the following node is a group then do g_deepFree on it, else free it
-    method freeAllInGroup { 13 } # free this synth and all other nodes in this group (before and after)
-    method freeGroup { 14 } # free the enclosing group and all nodes within it (including this synth)
-    method freeSelfResumeNext { 15 } # free this synth and resume the following node
+  # this next part is just a bunch of enums, basically
+  #
+  method none { 0 } # do nothing when the UGen is finished
+  method pauseSelf { 1 } # pause the enclosing synth, but do not free it
+  method freeSelf { 2 } # free the enclosing synth
+  method freeSelfAndPrev { 3 } # free both this synth and the preceding node
+  method freeSelfAndNext { 4 } # free both this synth and the following node
+  method freeSelfAndFreeAllInPrev { 5 } # free this synth; if the preceding node is a group then do g_freeAll on it, else free it
+  method freeSelfAndFreeAllInNext { 6 } # free this synth; if the following node is a group then do g_freeAll on it, else free it
+  method freeSelfToHead { 7 } # free this synth and all preceding nodes in this group
+  method freeSelfToTail { 8 } # free this synth and all following nodes in this group
+  method freeSelfPausePrev { 9 } # free this synth and pause the preceding node
+  method freeSelfPauseNext { 10 } # free this synth and pause the following node
+  method freeSelfAndDeepFreePrev { 11 } # free this synth and if the preceding node is a group then do g_deepFree on it, else free it
+  method freeSelfAndDeepFreeNext { 12 } # free this synth and if the following node is a group then do g_deepFree on it, else free it
+  method freeAllInGroup { 13 } # free this synth and all other nodes in this group (before and after)
+  method freeGroup { 14 } # free the enclosing group and all nodes within it (including this synth)
+  method freeSelfResumeNext { 15 } # free this synth and resume the following node
 }
 
 
@@ -318,34 +328,26 @@ class Done is UGen is export {
 #
 
 class BinaryOpUGen is UGen is export {
-  proto inputs($selector, $a, $b) { }
-  method make(|c) { callwith('??', &inputs.signature, c) }
-  # what is the rate of a BinaryOpUGen?
+  method inputs { :($selector, $a, $b) }
+  method rates { <ar kr ir> }
 }
 
+sub determine-rate(UGen $a, UGen $b) {
+  return 'ar' if $a.rate eq 'ar';
+  return 'ar' if $b.rate eq 'ar';
+  return 'kr' if $a.rate eq 'kr';
+  return 'kr' if $b.rate eq 'kr';
+  return 'ir' if $a.rate eq 'ir';
+  return 'ir' if $b.rate eq 'ir';
+  return '??'
+}
 
 multi sub infix:<*>(UGen $a, UGen $b) is export {
-  BinaryOpUGen.make('*', $a, $b)
-}
-
-multi sub infix:<*>(Numeric $a, UGen $b) is export {
-  BinaryOpUGen.make('*', $a, $b)
-}
-
-multi sub infix:<*>(UGen $a, Numeric $b) is export {
-  BinaryOpUGen.make('*', $a, $b)
-}
-
-multi sub infix:<+>(UGen $a, UGen $b) is export {
-  BinaryOpUGen.make('*', $a, $b)
-}
-
-multi sub infix:<+>(Numeric $a, UGen $b) is export {
-  BinaryOpUGen.make('*', $a, $b)
-}
-
-multi sub infix:<+>(UGen $a, Numeric $b) is export {
-  BinaryOpUGen.make('*', $a, $b)
+  given determine-rate($a, $b) {
+    when 'ar' { return BinaryOpUGen.ar('*', $a, $b) }
+    when 'kr' { return BinaryOpUGen.kr('*', $a, $b) }
+    when 'ir' { return BinaryOpUGen.ir('*', $a, $b) }
+  }
 }
 
 
