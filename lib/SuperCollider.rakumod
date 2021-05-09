@@ -72,6 +72,7 @@ sub resolve(Signature $signature, Capture $capture) {
   #
   for $capture.pairs {
     if .key ~~ Int {
+
       if .key >= $signature.params.elems {
         "trying to resolve this capture...".say;
         $capture.raku.say;
@@ -79,8 +80,10 @@ sub resolve(Signature $signature, Capture $capture) {
         $signature.raku.say;
         die "input value {.value} passed as argument {.key} is out of bounds";
       }
+
       my $key = $signature.params[.key].usage-name;
       %inputs{$key} = .value;
+
     } elsif .key ~~ Str {
       defined %inputs{.key} or die "parameter {.key} unknown";
       %inputs{.key} = .value;
@@ -102,11 +105,14 @@ sub resolve(Signature $signature, Capture $capture) {
   $it's-all-good or die "required parameter not covered";
 
   # XXX maybe replace any simple numbers in the inputs with Constant
-  #        for %inputs.pairs {
-  #          if .value ~~ Numeric {
-  #            %inputs{.key} = Constant.new: value => .value
-  #          }
-  #        }
+  for %inputs.pairs {
+    if .value ~~ Numeric {
+      %inputs{.key} = Constant.new:
+              type => 'Constant',
+              rate => 'ir',
+              value => .value;
+    }
+  }
 
   %inputs
 }
@@ -118,17 +124,26 @@ sub resolve(Signature $signature, Capture $capture) {
 sub dot(UGen $ugen, Str $output is rw) {
   my $name = "";
 
+#  with $ugen {
+#    if .type {
+#      $name ~= "{.type}.{.rate}";
+#    }
+#    else {
+#      die "UGen without type?"
+#    }
+#    if .type ~~ 'Control' | 'Constant' {
+#      if .name {
+#        $name ~= "\n{.name}";
+#      }
+#      $name ~= .value ?? "={.value}" !! "";
+#    }
+#  }
+
   with $ugen {
-    if .type {
-      $name ~= "{.type}.{.rate}";
-    }
-    else {
-      die "UGen without type?"
-    }
-    if .type ~~ 'Control' {
-      $name ~= "\n{.name}";
-      $name ~= .value ?? "={.value}" !! "";
-    }
+    if defined .type { $name ~= "{.type}\n" }
+    if defined .rate { $name ~= "{.rate}\n" }
+    if defined .name { $name ~= "{.name}\n" }
+    if defined .value { $name ~= "{.value}\n" }
   }
 
   my $id = "id_" ~ 999999999.rand.Int; # instance id
