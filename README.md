@@ -74,7 +74,9 @@ way.
 
 SynthDef expressions build a graph. Only a few UGens are supported. No OSC communication. No sound yet.
 
+It draws a graph!
 
+![](example.svg)
 
 ## Why?
 

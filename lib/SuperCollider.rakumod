@@ -9,7 +9,6 @@ role AbstractFunction does Object { }
 #= https://github.com/supercollider/supercollider/blob/develop/SCClassLibrary/Common/Core/AbstractFunction.sc
 
 
-
 #| https://doc.sccode.org/Classes/UGen.html
 class UGen {
     has $.type;
@@ -74,6 +73,11 @@ class UGen {
         $it's-all-good or die "required parameter not covered";
 
         # XXX maybe replace any simple numbers in the inputs with Constant
+#        for %inputs.pairs {
+#          if .value ~~ Numeric {
+#            %inputs{.key} = Constant.new: value => .value
+#          }
+#        }
 
         # remove the module name from the class name
         my $type = self.^name.split('::')[*-1];
@@ -94,7 +98,7 @@ class Control is UGen { }
 
 
 #| used to represent constants; XXX what does SuperCollider do?
-class Constant is UGen { }
+#class Constant is UGen { }
 
 
 sub dot(UGen $ugen, Str $output is rw) {
@@ -102,10 +106,14 @@ sub dot(UGen $ugen, Str $output is rw) {
 
   with $ugen {
     if .type {
-      $name ~= "{.type}.{.rate}"
+      $name ~= "{.type}.{.rate}";
     }
     else {
-      $name ~= "{.name}={.value}"
+      die "UGen without type?"
+    }
+    if .type ~~ 'Control' {
+      $name ~= "\n{.name}";
+      $name ~= .value ?? "={.value}" !! "";
     }
   }
 
@@ -171,11 +179,15 @@ class SynthDef is export {
     for $!graph.signature.params {
       if .positional {
         @list.push: Control.new(
+                :type('Control'),
+                :rate('kr'),
                 :name(.usage-name),
                 :value(.default ~~ Block ?? .default.() !! Any));
       }
       elsif .named {
         %hash{.usage-name} = Control.new(
+                :type('Control'),
+                :rate('kr'),
                 :name(.usage-name),
                 :value(.default ~~ Block ?? .default.() !! Any));
       }
@@ -189,10 +201,11 @@ class SynthDef is export {
     my $guts = "";
     dot $!structure, $guts;
     my $file-name = "/tmp/{9999999999.rand.Int}.dot";
-    my $graphviz = "digraph {$!name} \{ $guts \}";
+    my $graphviz = "digraph {$!name} \{\n$guts\n\}";
     spurt $file-name, $graphviz;
+    say "making $file-name.svg";
     shell "dot -Tsvg $file-name > $file-name.svg";
-    shell "open -a gapplin $file-name.svg";
+    shell "open $file-name.svg";
   }
 
   method add {
