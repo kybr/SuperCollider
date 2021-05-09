@@ -76,7 +76,7 @@ SynthDef expressions build a graph. Only a few UGens are supported. No OSC commu
 
 It draws a graph!
 
-![](example.svg)
+![](https://raw.githubusercontent.com/kybr/SuperCollider/main/graph.svg)
 
 ## Why?
 
