@@ -10,6 +10,8 @@ role AbstractFunction does Object { }
 
 
 sub resolve(Signature $signature, Capture $capture) {...}
+sub synthdef($name, $graph) {...}
+class Out {...}
 
 
 #| https://doc.sccode.org/Classes/UGen.html
@@ -27,6 +29,7 @@ class UGen {
   method make($rate, $capture) {
     my $type = self.^name.split('::')[*-1]; # remove the module name from the class name
     my %inputs = resolve(self.inputs, $capture); # calls down to child for signature
+    # "making $type.$rate".say;
     UGen.new: :$rate, :$type, :%inputs
   }
 
@@ -35,6 +38,13 @@ class UGen {
   method ar(|c) { self.make('ar', c) }
   method kr(|c) { self.make('kr', c) }
   method ir(|c) { self.make('ir', c) }
+
+  method play {
+    my $s = synthdef "default", -> $bus, {
+      Out.ar($bus, self)
+    };
+    $s.add.svg;
+  }
 }
 #= https://github.com/supercollider/supercollider/blob/develop/SCClassLibrary/Common/Audio/UGen.sc
 
@@ -44,6 +54,13 @@ class UGen {
 #| https://doc.sccode.org/Classes/NamedControl.html
 class Control is UGen { }
 class Constant is UGen { }
+
+sub constant-ugen(Numeric $n) {
+  Constant.new:
+      type => 'Constant',
+      rate => 'ir',
+      value => $n # XXX had a typo here (vaue) and it was a rough bug
+}
 
 #| create a UGen inputs hash, resolving the call capture with the proper signature
 sub resolve(Signature $signature, Capture $capture) {
@@ -110,10 +127,7 @@ sub resolve(Signature $signature, Capture $capture) {
   for %inputs.pairs {
     if .value ~~ Numeric {
       # XXX consider a lookup so we can merge constants?
-      %inputs{.key} = Constant.new:
-              type => 'Constant',
-              rate => 'ir',
-              value => .value;
+      %inputs{.key} = constant-ugen .value
     }
   }
 
@@ -125,10 +139,10 @@ sub dot(UGen $ugen, Str $output is rw) {
   my $name = "";
 
   with $ugen {
-    if defined .type { $name ~= "{.type}\n" }
-    if defined .rate { $name ~= "{.rate}\n" }
-    if defined .name { $name ~= "{.name}\n" }
-    if defined .value { $name ~= "{.value}\n" }
+    if defined .type { $name ~= "{.type}\\n" }
+    if defined .rate { $name ~= "{.rate}\\n" }
+    if defined .name { $name ~= "{.name}\\n" }
+    if defined .value { $name ~= "{.value}\\n" }
   }
 
   my $id = "id_" ~ 999999999.rand.Int; # instance id
@@ -209,13 +223,14 @@ class SynthDef is export {
     my $capture = Capture.new: :@list, :%hash;
     #say "calling graph with {$capture.raku}";
     $!structure = $!graph(|$capture); # the slip (|) operator de-structures the capture
+    Nil
   }
 
   method svg {
     my $guts = "";
     dot $!structure, $guts;
     my $file-name = "/tmp/{9999999999.rand.Int}.dot";
-    my $graphviz = "digraph {$!name} \{\n$guts\n\}";
+    my $graphviz = "digraph g_{99999999999.rand.Int} \{\n$guts\n\}";
     spurt $file-name, $graphviz;
     say "making $file-name.svg";
     shell "dot -Tsvg $file-name > $file-name.svg";
@@ -294,9 +309,24 @@ class MouseX is UGen is export {
 
 #| http://doc.sccode.org/Classes/PinkNoise.html
 class PinkNoise is UGen is export {
-  method inputs { :($mul = 0, $add = 0.2) }
+  method inputs { :($mul = 1.0, $add = 0.0) }
   method rates { <ar kr> }
 }
+
+
+#| https://doc.sccode.org/Classes/WhiteNoise.html
+class WhiteNoise is UGen is export {
+  method inputs { :($mul = 1.0, $add = 0.0) }
+  method rates { <ar kr> }
+}
+
+
+#| https://doc.sccode.org/Classes/Pan2.html
+class Pan2 is UGen is export {
+  method inputs { :($in, $pos = 0.0, $level = 1.0) }
+  method rates { <ar kr> }
+}
+
 
 #| https://doc.sccode.org/Classes/BufDur.html
 class BufDur is UGen is export {
@@ -373,12 +403,25 @@ sub make-binop($op, $a, $b --> UGen) {
 }
 
 multi sub infix:<*>(UGen $a, UGen $b) is export { make-binop('*', $a, $b)}
+multi sub infix:<*>(UGen $a, Numeric $b) is export { make-binop('*', $a, constant-ugen $b)}
+multi sub infix:<*>(Numeric $a, UGen $b) is export { make-binop('*', constant-ugen($a), $b)}
+
 multi sub infix:</>(UGen $a, UGen $b) is export { make-binop('/', $a, $b)}
+multi sub infix:</>(UGen $a, Numeric $b) is export { make-binop('/', $a, constant-ugen $b)}
+multi sub infix:</>(Numeric $a, UGen $b) is export { make-binop('/', constant-ugen($a), $b)}
+
 multi sub infix:<+>(UGen $a, UGen $b) is export { make-binop('+', $a, $b)}
+multi sub infix:<+>(UGen $a, Numeric $b) is export { make-binop('+', $a, constant-ugen $b)}
+multi sub infix:<+>(Numeric $a, UGen $b) is export { make-binop('+', constant-ugen($a), $b)}
+
 multi sub infix:<->(UGen $a, UGen $b) is export { make-binop('-', $a, $b)}
+multi sub infix:<->(UGen $a, Numeric $b) is export { make-binop('-', $a, constant-ugen $b)}
+multi sub infix:<->(Numeric $a, UGen $b) is export { make-binop('-', constant-ugen($a), $b)}
+
 multi sub infix:<!>($a, $b) is export is DEPRECATED("Use Raku's xx operator instead!") {
   $a xx $b
 }
+# XXX many, many other operators....
 
 
 #
@@ -390,7 +433,7 @@ multi rrand($low, $high) is export {
 }
 
 multi rrand($high = 1) is export {
-    $high.rand
+  $high.rand
 }
 
 
@@ -401,33 +444,27 @@ multi rrand($high = 1) is export {
 use MONKEY-TYPING;
 
 augment class Block {
-
-  # in SuperCollider {...}.play
-  # 1. creates a SynthDef
-  # 2. creates a Synth
-  # 3. plays that Synth
-  #
   method play {
-    "play called".say;
-
-    # 1. evaluate the block
-    my $t = self.();
-
-    # 2. check the return type
+    # evaluate the block; if it returned a UGen, call .play on it
+    my $t = self.(); # XXX what if it returns nothing?
     if $t ~~ UGen {
-      "we got a Node".say
+      $t.play # call .play on a UGen
     }
-
-    # 3. ?
   }
 
   # in SuperCollider you can call .value or value(...) on basically anything
   # on a function, it's like calling that function
   #
-  method value {
-    
-  }
+  method value {}
 }
 
+sub midicps($v) is export { 8.175799 * 2 ** ($v / 12) }
+# XXX more "operators" here!
+
+augment class Int { method midicps { midicps self } }
+augment class Rat { method midicps { midicps self } }
+augment class FatRat { method midicps { midicps self } }
+augment class Num { method midicps { midicps self } }
+augment class Complex { method midicps { midicps self } }
 
 }
