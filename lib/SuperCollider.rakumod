@@ -17,23 +17,30 @@ class Out {...}
 #| https://doc.sccode.org/Classes/UGen.html
 class UGen {
   has $.type;
-  has $.rate; # simple numbers have rate 'ir'?
+  has $.rate;
 
   # XXX consider making this an array; i think positions matter more than names
   has %.inputs; # no inputs or simple number inputs means leaf node
 
-  #has $.position; # ???
   has $.name;
   has $.value;
 
-  method make($rate, $capture) {
-    my $type = self.^name.split('::')[*-1]; # remove the module name from the class name
-    my %inputs = resolve(self.inputs, $capture); # calls down to child for signature
-    # "making $type.$rate".say;
-    UGen.new: :$rate, :$type, :%inputs
-  }
+  # has $.position; # XXX might we need this?
 
-  # XXX check if rate is supported!
+  method make($rate, $capture) {
+    # remove the module name from the class name
+    my $type = self.^name.split('::')[*-1];
+
+    # check if the rate is supported
+    $rate (elem) self.rates.Set or die "$rate not supported by $type";
+
+    # calls down to child for signature; make a hash of dependencies/inputs
+    my %inputs = resolve(self.inputs, $capture);
+
+    "making $type.$rate".say;
+
+    UGen.new: :$rate, :$type, :%inputs;
+  }
 
   method ar(|c) { self.make('ar', c) }
   method kr(|c) { self.make('kr', c) }
@@ -55,12 +62,16 @@ class UGen {
 class Control is UGen { }
 class Constant is UGen { }
 
-sub constant-ugen(Numeric $n) {
+
+#| handy sub for making a constant from a simple number
+sub constant-ugen($n) {
+  "new Constant.ir $n".say;
   Constant.new:
       type => 'Constant',
-      rate => 'ir',
-      value => $n # XXX had a typo here (vaue) and it was a rough bug
+      rate => 'ir', # simple numbers have rate 'ir'?
+      value => $n # XXX had a typo here (vaue) and it was a rough bug; complain!
 }
+
 
 #| create a UGen inputs hash, resolving the call capture with the proper signature
 sub resolve(Signature $signature, Capture $capture) {
@@ -125,8 +136,13 @@ sub resolve(Signature $signature, Capture $capture) {
 
   # replace Numeric constants with Constant
   for %inputs.pairs {
-    if .value ~~ Numeric {
-      # XXX consider a lookup so we can merge constants?
+    # XXX consider doing a lookup so we can merge constants
+    when .value ~~ Numeric {
+      # replace number with a Constant-wrapped number
+      %inputs{.key} = constant-ugen .value
+    }
+    when .value ~~ Str {
+      # XXX this is ok for now, but i need to figure out binary operators
       %inputs{.key} = constant-ugen .value
     }
   }
@@ -134,28 +150,32 @@ sub resolve(Signature $signature, Capture $capture) {
   %inputs
 }
 
+sub dot(UGen $ugen, %visited-id, Str $output is rw) {
 
-sub dot(UGen $ugen, Str $output is rw) {
-  my $name = "";
+  # recursive base case; do not revisit nodes of the graph
+  # XXX is there a way to make this line cleaner/shorter?
+  return %visited-id{$ugen} if defined %visited-id{$ugen};
 
-  with $ugen {
-    if defined .type { $name ~= "{.type}\\n" }
-    if defined .rate { $name ~= "{.rate}\\n" }
-    if defined .name { $name ~= "{.name}\\n" }
-    if defined .value { $name ~= "{.value}\\n" }
-  }
+  # XXX is there a way to use .WHICH instead; is that better?
+  my $id = "_" ~ 99999999999999.rand.Int.fmt('%X');
+  %visited-id{$ugen} = $id; # mark this UGen with breadcrumbs :)
 
-  my $id = "id_" ~ 999999999.rand.Int; # instance id
-  my $declaration = "  $id [label=\"$name\"];\n";
+  # the name we want to read on the graph node for this UGen
+  my $name = $id.match(/......$/) ~ "\\n" ~ join " ",
+          gather given $ugen { (.type, .rate, .name, .value).grep(*.defined).map(*.take) };
 
-  $output ~= $declaration;
+  # declaration
+  $output ~= "  $id [label=\"$name\"];\n";
+
   for $ugen.inputs.pairs {
     my $label = "[label=\"{.key}\"]";
     if .value ~~ UGen {
-      $output ~= "  $id -> {dot .value, $output} $label;\n";
+      # recursive call; may shortcut to existing id
+      my $that = dot .value, %visited-id, $output;
+      $output ~= "  $id -> $that $label;\n";
     }
     else {
-      $output ~= "  $id -> \"{.value}\" $label;\n"
+      $output ~= "  $id -> {.value} $label;\n";
     }
   }
 
@@ -228,7 +248,8 @@ class SynthDef is export {
 
   method svg {
     my $guts = "";
-    dot $!structure, $guts;
+    my %visited-id = Hash.new;
+    dot $!structure, %visited-id, $guts;
     my $file-name = "/tmp/{9999999999.rand.Int}.dot";
     my $graphviz = "digraph g_{99999999999.rand.Int} \{\n$guts\n\}";
     spurt $file-name, $graphviz;
