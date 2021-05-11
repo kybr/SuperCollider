@@ -63,16 +63,24 @@ class Control is UGen { }
 class Constant is UGen { }
 
 
+our %constant;
+
 #| handy sub for making a constant from a simple number
-sub constant-ugen($n) {
-  # "new Constant.ir $n".say;
-  Constant.new:
+sub constant-ugen($value where {$value ~~ Numeric | Str}) {
+  if defined %constant{$value} {
+    # there's already a constant for this!
+    return %constant{$value}
+  }
+
+  "new Constant.ir $value ({$value.^name})".say;
+  my $ugen = Constant.new:
       type => 'Constant',
       rate => 'ir', # simple numbers have rate 'ir'?
-      value => $n # XXX had a typo here (vaue) and it was a rough bug; complain!
-}
+      value => $value; # XXX had a typo here (vaue) and it was a rough bug; complain
 
-our %constant;
+  %constant{$value} = $ugen;
+  return $ugen;
+}
 
 #| create a UGen inputs hash, resolving the call capture with the proper signature
 sub resolve(Signature $signature, Capture $capture) {
@@ -142,16 +150,7 @@ sub resolve(Signature $signature, Capture $capture) {
     when .value ~~ Numeric | Str {
       # replace number with a Constant-wrapped number
       # XXX this is ok for now, but what about * and + and BinaryOpUGEn in general?
-      my $ugen;
-      if defined %constant{.value} {
-        $ugen = %constant{.value}
-      }
-      else {
-        $ugen = constant-ugen .value;
-        %constant{.value} = $ugen;
-      }
-
-      %inputs{.key} = $ugen;
+      %inputs{.key} = constant-ugen .value;
     }
   }
 
@@ -190,7 +189,7 @@ sub dot(UGen $ugen, %visited-id, Str $output is rw) {
     my $label = "[label=\"{.key}\"]";
     my $that = dot .value, %visited-id, $output;
     #my $that = .value ~~ UGen ?? dot .value, %visited-id, $output !! .value;
-    say ($id, $that, $label, .value).map(*.^name);
+    # say ($id, $that, $label, .value).map(*.^name);
 
     my $comment ~= "{.key} => {$ugen.type}.{$ugen.rate}";
     if $that.^name eq 'Any' {
@@ -294,7 +293,7 @@ class SynthDef is export {
 
   method add {
     my $structure = self.create-structure;
-    say $structure;
+    # say $structure;
     for %constant.pairs {
       say .key ~ " --> " ~ .value;
     }
