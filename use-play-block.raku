@@ -23,11 +23,6 @@ use SuperCollider;
         PinkNoise.ar(0.1 * $x + 0.1)
   }.play;
 }
-# the order should be
-# - MouseX.
-#
-#
-#
 
 # here's the thing with sigil-less "variables"
 # {

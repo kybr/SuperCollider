@@ -37,7 +37,7 @@ class UGen {
     # calls down to child for signature; make a hash of dependencies/inputs
     my %inputs = resolve(self.inputs, $capture);
 
-    "making $type.$rate".say;
+    # "new $type.$rate".say;
 
     UGen.new: :$rate, :$type, :%inputs;
   }
@@ -65,13 +65,14 @@ class Constant is UGen { }
 
 #| handy sub for making a constant from a simple number
 sub constant-ugen($n) {
-  "new Constant.ir $n".say;
+  # "new Constant.ir $n".say;
   Constant.new:
       type => 'Constant',
       rate => 'ir', # simple numbers have rate 'ir'?
       value => $n # XXX had a typo here (vaue) and it was a rough bug; complain!
 }
 
+our %constant;
 
 #| create a UGen inputs hash, resolving the call capture with the proper signature
 sub resolve(Signature $signature, Capture $capture) {
@@ -136,14 +137,21 @@ sub resolve(Signature $signature, Capture $capture) {
 
   # replace Numeric constants with Constant
   for %inputs.pairs {
-    # XXX consider doing a lookup so we can merge constants
-    when .value ~~ Numeric {
+    # name => value e.g., freq => 440
+
+    when .value ~~ Numeric | Str {
       # replace number with a Constant-wrapped number
-      %inputs{.key} = constant-ugen .value
-    }
-    when .value ~~ Str {
-      # XXX this is ok for now, but i need to figure out binary operators
-      %inputs{.key} = constant-ugen .value
+      # XXX this is ok for now, but what about * and + and BinaryOpUGEn in general?
+      my $ugen;
+      if defined %constant{.value} {
+        $ugen = %constant{.value}
+      }
+      else {
+        $ugen = constant-ugen .value;
+        %constant{.value} = $ugen;
+      }
+
+      %inputs{.key} = $ugen;
     }
   }
 
@@ -171,23 +179,41 @@ sub dot(UGen $ugen, %visited-id, Str $output is rw) {
   my $name = join " ", gather given $ugen { (.type, .rate, .name, .value).grep(*.defined).map(*.take) };
 
   # if you want to see the id...
-  #$name ~= "\\n" ~ $id.match(/......$/);
+  $name ~= "\\n" ~ $id.match(/......$/);
 
-  # node declaration
-  $output ~= "  $id [label=\"$name\"];\n";
+  # node declaration with comment
+  $output ~= "  $id [label=\"$name\"]; // $ugen\n";
 
   for $ugen.inputs.pairs {
+    if .value.^name eq 'Any' { die .key }
+
     my $label = "[label=\"{.key}\"]";
-    my $that = .value ~~ UGen ?? dot .value, %visited-id, $output !! .value;
+    my $that = dot .value, %visited-id, $output;
+    #my $that = .value ~~ UGen ?? dot .value, %visited-id, $output !! .value;
+    say ($id, $that, $label, .value).map(*.^name);
+
+    my $comment ~= "{.key} => {$ugen.type}.{$ugen.rate}";
+    if $that.^name eq 'Any' {
+      say $output;
+      die "$id ______ $label";
+    }
+    elsif $that.^name eq 'Str' {
+      # this is a node that is already visited
+      $comment ~= " --> $that";
+    }
+    else {
+      $comment ~= " --> {$that.type}.{$that.rate}";
+    }
 
     # edge / arrow
-    $output ~= "  $id -> $that $label;\n";
+    $output ~= "  $id -> $that $label; // $comment\n";
   }
 
   $id # the id of this UGen
 }
 
 
+#| https://doc.sccode.org/Classes/SynthDef.html
 #| https://doc.sccode.org/Classes/SynthDef.html
 #| https://doc.sccode.org/Tutorials/Mark_Polishook_tutorial/07_SynthDefs.html
 class SynthDef is export {
@@ -248,6 +274,7 @@ class SynthDef is export {
     my $capture = Capture.new: :@list, :%hash;
     #say "calling graph with {$capture.raku}";
     $!structure = $!graph(|$capture); # the slip (|) operator de-structures the capture
+
     Nil
   }
 
@@ -268,6 +295,9 @@ class SynthDef is export {
   method add {
     my $structure = self.create-structure;
     say $structure;
+    for %constant.pairs {
+      say .key ~ " --> " ~ .value;
+    }
 
     self
   }
