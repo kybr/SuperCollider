@@ -150,6 +150,13 @@ sub resolve(Signature $signature, Capture $capture) {
   %inputs
 }
 
+class GraphVisitor {
+  has %.visited;
+  method visit(UGen $ugen, &function) {
+    # call function on each UGen ...in topological order?
+  }
+}
+
 sub dot(UGen $ugen, %visited-id, Str $output is rw) {
 
   # recursive base case; do not revisit nodes of the graph
@@ -161,22 +168,20 @@ sub dot(UGen $ugen, %visited-id, Str $output is rw) {
   %visited-id{$ugen} = $id; # mark this UGen with breadcrumbs :)
 
   # the name we want to read on the graph node for this UGen
-  my $name = $id.match(/......$/) ~ "\\n" ~ join " ",
-          gather given $ugen { (.type, .rate, .name, .value).grep(*.defined).map(*.take) };
+  my $name = join " ", gather given $ugen { (.type, .rate, .name, .value).grep(*.defined).map(*.take) };
 
-  # declaration
+  # if you want to see the id...
+  #$name ~= "\\n" ~ $id.match(/......$/);
+
+  # node declaration
   $output ~= "  $id [label=\"$name\"];\n";
 
   for $ugen.inputs.pairs {
     my $label = "[label=\"{.key}\"]";
-    if .value ~~ UGen {
-      # recursive call; may shortcut to existing id
-      my $that = dot .value, %visited-id, $output;
-      $output ~= "  $id -> $that $label;\n";
-    }
-    else {
-      $output ~= "  $id -> {.value} $label;\n";
-    }
+    my $that = .value ~~ UGen ?? dot .value, %visited-id, $output !! .value;
+
+    # edge / arrow
+    $output ~= "  $id -> $that $label;\n";
   }
 
   $id # the id of this UGen
@@ -256,12 +261,14 @@ class SynthDef is export {
     say "making $file-name.svg";
     shell "dot -Tsvg $file-name > $file-name.svg";
     shell "open $file-name.svg";
+
+    self
   }
 
   method add {
     my $structure = self.create-structure;
     say $structure;
-    # output graphviz
+
     self
   }
 }
