@@ -4,7 +4,9 @@ use lib 'lib';
 use SuperCollider;
 
 # https://doc.sccode.org/Classes/NamedControl.html
-# the positions of the arguments changes
+# - we don't have to specify a formal argument list
+# - we use two chars ($^) instead of the one (\) that SuperCollider uses
+#
 {
 SynthDef("simple", {
   Out.ar($^out.ar,

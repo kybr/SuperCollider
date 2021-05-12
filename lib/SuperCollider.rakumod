@@ -95,32 +95,35 @@ module SuperCollider {
   #| https://doc.sccode.org/Classes/AudioControl.html
   #| https://doc.sccode.org/Classes/NamedControl.html
   class Control is UGen {
-    # ar, kr, ir and such should set the default value and rate
-    # also, it should be an error if these are called a second time
-    # all these methods assume that the Control is already made!
-    multi method ar($v = Any) {
+    # ar, kr, and ir are here to support the named-control style
+    # XXX it should be an error if these are called a second time
+
+    method ar($v = Any) {
       self.rate = 'ar';
       self.value = $v;
       say "Control.ar {self.name} " ~ ($v ?? $v !! "");
-      self
+      self # return this modified object
     }
-    multi method kr($v = Any) {
+
+    method kr($v = Any) {
       self.rate = 'kr';
       self.value = $v;
       say "Control.kr {self.name} " ~ ($v ?? $v !! "");
-      self
+      self # return this modified object
     }
-    multi method ir($v = Any) {
+
+    method ir($v = Any) {
       self.rate = 'ir';
       self.value = $v;
       say "Control.ir {self.name} " ~ ($v ?? $v !! "");
-      self
+      self # return this modified object
     }
   }
+
   sub control-ugen($name, $value) {
     # XXX make a list of controls?
     Control.new:
-            :type('Control'),
+            :type('Control'), # XXX is this automatic behaviour?
             :rate('kr'),
             :$name,
             :$value
