@@ -118,6 +118,8 @@ values are there to be inspected, so we can build a graph.
 Rules for function arguments are different. SuperCollider seems to allow required arguments (ones without default values) after those that are optional. Raku does not allow that.
 
 
+Question: does SuperCollider pass 0 for graph function parameters that do not have defaults? a decode of has-diamond-graph seems to suggest so.
+
 
 
 [Raku]: https://raku.org/
