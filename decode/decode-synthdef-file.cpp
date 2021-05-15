@@ -14,96 +14,29 @@ using namespace std;
 
 bool debug = false;
 
-void put(string message) { cout << message; }
+//
+// helper functions
+//
+
 void say(string message) { cout << message << endl; }
 void die(string message) {
   cerr << message << endl;
   exit(1);
 }
-void announce(string message) {
-  cout << "###############=- " << message << " -=#########################"
-       << endl;
-  ;
-}
 
-// calls a given lambda N times, gathering the result into a vector
 //
-template <typename F>
-auto gather(int N, F&& fn) {
-  using T = decltype(fn());
-  vector<T> vec;
-  for (int i = 0; i < N; ++i) vec.push_back(move(fn()));
-  return move(vec);
-}
-
-// provides a string for a given type
-// say: `type_name<decltype(expression)>()`
+// the SynthDef data structure
 //
-template <typename T>
-constexpr auto type_name() noexcept {
-  std::string_view name, prefix, suffix;
-#ifdef __clang__
-  name = __PRETTY_FUNCTION__;
-  prefix = "auto type_name() [T = ";
-  suffix = "]";
-#elif defined(__GNUC__)
-  name = __PRETTY_FUNCTION__;
-  prefix = "constexpr auto type_name() [with T = ";
-  suffix = "]";
-#elif defined(_MSC_VER)
-  name = __FUNCSIG__;
-  prefix = "auto __cdecl type_name<";
-  suffix = ">(void) noexcept";
-#endif
-  name.remove_prefix(prefix.size());
-  name.remove_suffix(suffix.size());
-  return name;
-}
 
-template <typename T>
-auto gist(vector<T> const& list) -> string {
-  string s;
-  for (auto e : list) s += e.gist();
-  return s;
-}
-template <>  // string
-auto gist(vector<string> const& list) -> string {
-  string s;
-  for (auto e : list) s += e + " ";
-  return s;
-}
-template <>  // float
-auto gist(vector<float> const& list) -> string {
-  string s;
-  for (auto e : list) s += to_string(e) + " ";
-  return s;
-}
-
-// a SynthDef data structure
-//
 struct SynthDef {
   struct Parameter {
     string name;
     float value;
-
-    string gist() {
-      string s;
-      // s += string("Parameter:");
-      s += name + "=" + to_string(value) + " ";
-      return s;
-    }
   };
 
   struct UGen {
     struct Input {
       int a, b;  // XXX do better here
-
-      string gist() {
-        string s;
-        // s += "Input:";
-        s += to_string(a) + "/" + to_string(b) + " ";
-        return s;
-      }
     };
 
     string name;
@@ -111,31 +44,11 @@ struct SynthDef {
     short special_index;
     vector<Input> input;
     vector<string> output;
-
-    string gist() {
-      string s;
-      // s += "UGen: ";
-      s += "  " + name + "." + rate + " ";
-      s += to_string(special_index) + " ";
-      s += ::gist(input);
-      s += ::gist(output);
-      s += "\n";
-      return s;
-    }
   };
 
   struct Variant {
     string name;
     vector<float> value;
-
-    string gist() {
-      string s;
-      // s += "Variant:";
-      s += name;
-      s += "/";
-      s += ::gist(value);
-      return s;
-    }
   };
 
   string name;
@@ -144,41 +57,104 @@ struct SynthDef {
   vector<Parameter> parameter_name;
   vector<UGen> ugen;
   vector<Variant> variant;
-
-  string gist() {
-    string s;
-    s += "SynthDef: ";
-    s += name + "\n";
-    s += "  constant: " + ::gist(constant) + "\n";
-    s += "  parameter_value: " + ::gist(parameter_value) + "\n";
-    s += "  parameter_name: " + ::gist(parameter_name) + "\n";
-    s += ::gist(ugen);
-    s += "  variant:" + ::gist(variant) + "\n";
-    return s;
-  }
 };
 
-struct Decode {
+//
+// ways to make strings out of SynthDef parts and pieces
+//
+
+template <typename T>
+auto gist(vector<T> const& list) -> string {
+  string s;
+  for (auto e : list) s += gist(e);
+  return s;
+}
+
+template <>  // string
+auto gist(vector<string> const& list) -> string {
+  string s;
+  for (auto e : list) s += e + " ";
+  return s;
+}
+template <>  // float
+
+auto gist(vector<float> const& list) -> string {
+  string s;
+  for (auto e : list) s += to_string(e) + " ";
+  return s;
+}
+
+string gist(SynthDef::UGen::Input const& v) {
+  string s;
+  // s += "Input:";
+  s += to_string(v.a) + "/" + to_string(v.b) + " ";
+  return s;
+}
+
+string gist(SynthDef::Parameter const& v) {
+  string s;
+  // s += string("Parameter:");
+  s += v.name + "=" + to_string(v.value) + " ";
+  return s;
+}
+
+string gist(SynthDef::Variant const& v) {
+  string s;
+  // s += "Variant:";
+  s += v.name;
+  s += "/";
+  s += gist(v.value);
+  return s;
+}
+
+string gist(SynthDef::UGen const& v) {
+  string s;
+  // s += "UGen: ";
+  s += "  " + v.name + "." + v.rate + " ";
+  s += to_string(v.special_index) + " ";
+  s += gist(v.input);
+  s += gist(v.output);
+  s += "\n";
+  return s;
+}
+
+string gist(SynthDef const& v) {
+  string s;
+  s += "SynthDef: ";
+  s += v.name + "\n";
+  s += "  constant: " + gist(v.constant) + "\n";
+  s += "  parameter_value: " + gist(v.parameter_value) + "\n";
+  s += "  parameter_name: " + gist(v.parameter_name) + "\n";
+  s += gist(v.ugen);
+  s += "  variant:" + gist(v.variant) + "\n";
+  return s;
+}
+
+// calls a given lambda N times, gathering the result into a vector
+//
+template <typename F>
+auto gather(int N, F&& fn) {
+  using T = decltype(fn());
+  vector<T> vec;
+  for (int i = 0; i < N; ++i) vec.push_back(fn());
+  return vec;
+}
+
+int main(int argc, char* argv[]) {
+  if (argc < 2) die("not enough arguments");
+  debug = argc > 2;
+
   ifstream file;
+  file.open(argv[1], ios::binary);
+  if (file.fail()) die("could not open file");
 
-  void load(string fileName) {
-    file.open(fileName, ios::binary);
-    if (file.fail()) die("FAIL");
-  }
+  const char* rate[3] = {"ir", "kr", "ar"};
 
-  ~Decode() { file.close(); }
+  //
+  // functions for decoding a byte stream
+  //
 
-  unsigned char u8_BROKEN_DO_NOT_TRUST_THE_STREAM_OPERATOR() {
-    if (file.fail()) die("FAIL");
-    if (file.eof()) die("EOF");
-    unsigned char byte;
-    file >> byte;
-    printf("%02X ", byte & 255);
-    if (file.fail()) die("FAIL");
-    return byte;
-  }
-
-  unsigned char u8() {
+  auto u8 = [&]() -> unsigned char {
     char c;
     file.read(&c, 1);
     if (file.fail()) die("FAIL");
@@ -186,18 +162,7 @@ struct Decode {
     if (debug) printf("%02X ", 255 & c);
     return c;
   };
-};
 
-int main(int argc, char* argv[]) {
-  Decode decode;
-  decode.load(argc > 1 ? argv[1] : "");
-
-  // turn on debugging
-  debug = argc > 2;
-
-  const char* rate[3] = {"ir", "kr", "ar"};
-
-  auto u8 = [&]() -> unsigned char { return decode.u8(); };
   auto i8 = [&]() -> char { return u8(); };
 
   auto i16 = [&]() -> short {
@@ -228,15 +193,22 @@ int main(int argc, char* argv[]) {
     return rv;
   };
 
+  //
+  // read the .scsyndef file
+  //
+
+  // verify magic number
+  //
   if (i8() != 'S' || i8() != 'C' || i8() != 'g' || i8() != 'f')  //
     die("SCgf not found");
-
   if (debug) say("SCgf");
 
+  // verify version
+  //
   if (i32() != 2)  //
     die("incorrect version");
 
-  // it's lambdas all the way down!
+  // decode a SynthDef from a byte stream; it's lambdas all the way down!
   //
   auto synthdef = gather(i16(), [&]() -> SynthDef {
     SynthDef synth;
@@ -270,7 +242,8 @@ int main(int argc, char* argv[]) {
   });
 
   // you have a list of SynthDef!
+  //
   for (auto s : synthdef) {
-    say(s.gist());
+    say(gist(s));
   }
 }
