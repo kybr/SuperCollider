@@ -1,3 +1,4 @@
 lib/.precomp/
 .idea/
 SuperCollider.iml
+decode-synthdef-file
