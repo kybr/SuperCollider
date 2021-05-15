@@ -1,3 +1,9 @@
+// SuperCollider .scsyndef file decoder
+// Karl Yerkes
+// 2021-05-15
+// Find the SynthDef File Format here:
+//   http://doc.sccode.org/Reference/Synth-Definition-File-Format.html
+//
 #include <fstream>
 #include <functional>
 #include <iostream>
@@ -20,30 +26,27 @@ void announce(string message) {
   ;
 }
 
-struct Input {
-  int a, b;
-  // XXX do better here
-};
-
-struct Parameter {
-  string name;
-  float value;
-};
-
-struct UGen {
-  string name;
-  string rate;
-  short special_index;
-  vector<Input> input;
-  vector<string> output;
-};
-
-struct Variant {
-  string name;
-  vector<float> value;
-};
-
 struct SynthDef {
+  struct Parameter {
+    string name;
+    float value;
+  };
+  struct UGen {
+    struct Input {
+      int a, b;
+      // XXX do better here
+    };
+    string name;
+    string rate;
+    short special_index;
+    vector<Input> input;
+    vector<string> output;
+  };
+  struct Variant {
+    string name;
+    vector<float> value;
+  };
+
   string name;
   vector<float> constant;
   vector<float> parameter_value;
@@ -82,10 +85,9 @@ struct Decode {
   };
 };
 
-// XXX we wish we could deduce T given F!!
-// XXX we wish we could assert that F returns a T!
-template <typename T, typename F>
-vector<T> loop(int N, F&& fn) {
+template <typename F>
+auto gather(int N, F&& fn) {
+  using T = decltype(fn());
   vector<T> vec;
   for (int i = 0; i < N; ++i)  //
     vec.push_back(move(fn()));
@@ -140,30 +142,32 @@ int main(int argc, char* argv[]) {
   if (i32() != 2)  //
     die("incorrect version");
 
-  auto synthdef = loop<SynthDef>(i16(), [&]() -> SynthDef {
+  auto synthdef = gather(i16(), [&]() -> SynthDef {
     SynthDef synth;
     synth.name = str();
-    synth.constant = loop<float>(i32(), f32);
+    synth.constant = gather(i32(), f32);
     auto P = i32();  // named because we use it later!
-    synth.parameter_value = loop<float>(P, f32);
-    synth.parameter_name = loop<Parameter>(i32(), [&]() -> Parameter {
+    synth.parameter_value = gather(P, f32);
+    synth.parameter_name = gather(i32(), [&]() -> SynthDef::Parameter {
       return {str(), synth.parameter_value[i32()]};
     });
-    synth.ugen = loop<UGen>(i32(), [&]() -> UGen {
-      UGen ugen;
+    synth.ugen = gather(i32(), [&]() -> SynthDef::UGen {
+      SynthDef::UGen ugen;
       ugen.name = str();
       ugen.rate = rate[i8()];
       int I = i32();
       int O = i32();
       ugen.special_index = i16();
-      ugen.input = loop<Input>(I, [&]() -> Input { return {i32(), i32()}; });
-      ugen.output = loop<string>(O, [&]() -> string { return rate[i8()]; });
+      ugen.input = gather(I, [&]() -> SynthDef::UGen::Input {
+        return {i32(), i32()};
+      });
+      ugen.output = gather(O, [&]() -> string { return rate[i8()]; });
       return ugen;
     });
-    synth.variant = loop<Variant>(i16(), [&]() -> Variant {
-      Variant variant;
+    synth.variant = gather(i16(), [&]() -> SynthDef::Variant {
+      SynthDef::Variant variant;
       variant.name = str();
-      variant.value = loop<float>(P, f32);
+      variant.value = gather(P, f32);
       return variant;
     });
     return synth;
