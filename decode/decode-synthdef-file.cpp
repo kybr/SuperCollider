@@ -19,9 +19,20 @@ bool debug = false;
 //
 
 void say(string message) { cout << message << endl; }
+void print(string message) { cout << message; }
 void die(string message) {
   cerr << message << endl;
   exit(1);
+}
+
+// calls a given lambda N times, gathering the result into a vector
+//
+template <typename F>
+auto gather(int N, F&& fn) {
+  using T = decltype(fn());
+  vector<T> v;
+  for (int i = 0; i < N; i++) v.push_back(fn());
+  return v;
 }
 
 //
@@ -63,20 +74,18 @@ struct SynthDef {
 // ways to make strings out of SynthDef parts and pieces
 //
 
-template <typename T>
+template <typename T>  // general case for list of things
 auto gist(vector<T> const& list) -> string {
   string s;
   for (auto e : list) s += gist(e);
   return s;
 }
 
-template <>  // string
 auto gist(vector<string> const& list) -> string {
   string s;
   for (auto e : list) s += e + " ";
   return s;
 }
-template <>  // float
 
 auto gist(vector<float> const& list) -> string {
   string s;
@@ -84,21 +93,21 @@ auto gist(vector<float> const& list) -> string {
   return s;
 }
 
-string gist(SynthDef::UGen::Input const& v) {
+auto gist(SynthDef::UGen::Input const& v) -> string {
   string s;
   // s += "Input:";
   s += to_string(v.a) + "/" + to_string(v.b) + " ";
   return s;
 }
 
-string gist(SynthDef::Parameter const& v) {
+auto gist(SynthDef::Parameter const& v) -> string {
   string s;
   // s += string("Parameter:");
   s += v.name + "=" + to_string(v.value) + " ";
   return s;
 }
 
-string gist(SynthDef::Variant const& v) {
+auto gist(SynthDef::Variant const& v) -> string {
   string s;
   // s += "Variant:";
   s += v.name;
@@ -107,7 +116,7 @@ string gist(SynthDef::Variant const& v) {
   return s;
 }
 
-string gist(SynthDef::UGen const& v) {
+auto gist(SynthDef::UGen const& v) -> string {
   string s;
   // s += "UGen: ";
   s += "  " + v.name + "." + v.rate + " ";
@@ -118,7 +127,7 @@ string gist(SynthDef::UGen const& v) {
   return s;
 }
 
-string gist(SynthDef const& v) {
+auto gist(SynthDef const& v) -> string {
   string s;
   s += "SynthDef: ";
   s += v.name + "\n";
@@ -130,24 +139,23 @@ string gist(SynthDef const& v) {
   return s;
 }
 
-// calls a given lambda N times, gathering the result into a vector
 //
-template <typename F>
-auto gather(int N, F&& fn) {
-  using T = decltype(fn());
-  vector<T> vec;
-  for (int i = 0; i < N; ++i) vec.push_back(fn());
-  return vec;
-}
+// main
+//
 
 int main(int argc, char* argv[]) {
   if (argc < 2) die("not enough arguments");
-  debug = argc > 2;
 
+  debug = argc > 2;  // turn on debugging?
+
+  // open a .scsyndef
+  //
   ifstream file;
   file.open(argv[1], ios::binary);
   if (file.fail()) die("could not open file");
 
+  // used later to change a rate index into a string
+  //
   const char* rate[3] = {"ir", "kr", "ar"};
 
   //
@@ -212,38 +220,58 @@ int main(int argc, char* argv[]) {
   //
   auto synthdef = gather(i16(), [&]() -> SynthDef {
     SynthDef synth;
+
     synth.name = str();
+
     synth.constant = gather(i32(), f32);
+
     auto P = i32();  // named because we use it later!
+
     synth.parameter_value = gather(P, f32);
+
     synth.parameter_name = gather(i32(), [&]() -> SynthDef::Parameter {
       return {str(), synth.parameter_value[i32()]};
     });
+
     synth.ugen = gather(i32(), [&]() -> SynthDef::UGen {
       SynthDef::UGen ugen;
+
       ugen.name = str();
+
       ugen.rate = rate[i8()];
+
       int I = i32();
       int O = i32();
+
       ugen.special_index = i16();
+
       ugen.input = gather(I, [&]() -> SynthDef::UGen::Input {
         return {i32(), i32()};
       });
+
       ugen.output = gather(O, [&]() -> string { return rate[i8()]; });
+
       return ugen;
     });
+
     synth.variant = gather(i16(), [&]() -> SynthDef::Variant {
       SynthDef::Variant variant;
+
       variant.name = str();
+
       variant.value = gather(P, f32);
+
       return variant;
     });
+
     return synth;
   });
 
-  // you have a list of SynthDef!
   //
-  for (auto s : synthdef) {
-    say(gist(s));
-  }
+  // the end
+  //
+
+  // you now have a list of SynthDef!
+  //
+  for (auto s : synthdef) say(gist(s));
 }
