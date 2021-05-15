@@ -6,6 +6,8 @@
 
 using namespace std;
 
+bool debug = false;
+
 void put(string message) { cout << message; }
 void say(string message) { cout << message << endl; }
 void die(string message) {
@@ -20,30 +22,34 @@ void announce(string message) {
 
 struct Input {
   int a, b;
+  // XXX do better here
+};
+
+struct Parameter {
+  string name;
+  float value;
 };
 
 struct UGen {
   string name;
   string rate;
   short special_index;
-  vector<Input> inputs;
-  vector<string> outputs;
+  vector<Input> input;
+  vector<string> output;
 };
 
 struct Variant {
   string name;
-  vector<float> values;
-};
-
-struct Parameter {
-  string name;
-  float value;
-  void show() { printf("Parameter %s %f\n", name.c_str(), value); }
+  vector<float> value;
 };
 
 struct SynthDef {
-  // name
-  //
+  string name;
+  vector<float> constant;
+  vector<float> parameter_value;
+  vector<Parameter> parameter_name;
+  vector<UGen> ugen;
+  vector<Variant> variant;
 };
 
 struct Decode {
@@ -56,7 +62,7 @@ struct Decode {
 
   ~Decode() { file.close(); }
 
-  unsigned char u8_BROKEN() {
+  unsigned char u8_BROKEN_DO_NOT_TRUST_THE_STREAM_OPERATOR() {
     if (file.fail()) die("FAIL");
     if (file.eof()) die("EOF");
     unsigned char byte;
@@ -71,8 +77,7 @@ struct Decode {
     file.read(&c, 1);
     if (file.fail()) die("FAIL");
     if (file.eof()) die("EOF");
-    // printf("%02ld:%02X ", file.gcount(), c);
-    printf("%02X ", 255 & c);
+    if (debug) printf("%02X ", 255 & c);
     return c;
   };
 };
@@ -91,6 +96,9 @@ int main(int argc, char* argv[]) {
   Decode decode;
   decode.load(argc > 1 ? argv[1] : "");
 
+  // turn on debugging
+  debug = argc > 2;
+
   const char* rate[3] = {"ir", "kr", "ar"};
 
   auto u8 = [&]() -> unsigned char { return decode.u8(); };
@@ -98,91 +106,68 @@ int main(int argc, char* argv[]) {
 
   auto i16 = [&]() -> short {
     short s = u8() << 8 | u8();
-    printf("short: %d\n", s);
+    if (debug) printf("short: %d\n", s);
     return s;
   };
 
   auto i32 = [&]() -> int {
     int i = u8() << 24 | u8() << 16 | u8() << 8 | u8();
-    printf("int: %d\n", i);
+    if (debug) printf("int: %d\n", i);
     return i;
   };
 
   auto f32 = [&]() -> float {
     int i = u8() << 24 | u8() << 16 | u8() << 8 | u8();
     float f = reinterpret_cast<float&>(i);
-    // float f = *reinterpret_cast<float*>(&i);
-    printf("float: %f\n", f);
+    if (debug) printf("float: %f\n", f);
     return f;
   };
 
   auto str = [&]() -> string {
     unsigned char N = u8();
-
     string rv = "";
     for (unsigned char i = 0; i < N; i++)  //
       rv += u8();
-    printf("string: '%s' (%d)\n", rv.c_str(), N);
+    if (debug) printf("string: '%s' (%d)\n", rv.c_str(), N);
     return rv;
   };
 
   if (i8() != 'S' || i8() != 'C' || i8() != 'g' || i8() != 'f')  //
     die("SCgf not found");
-  say("SCgf");
+
+  if (debug) say("SCgf");
 
   if (i32() != 2)  //
     die("incorrect version");
 
-  auto synthdefs = loop<SynthDef>(i16(), [&]() -> SynthDef {
-    announce("SynthDef");
-
-    auto name = str();
-
-    auto constant_values = loop<float>(i32(), f32);
-
+  auto synthdef = loop<SynthDef>(i16(), [&]() -> SynthDef {
+    SynthDef synth;
+    synth.name = str();
+    synth.constant = loop<float>(i32(), f32);
     auto P = i32();  // named because we use it later!
-
-    auto initial_parameter_values = loop<float>(P, f32);
-
-    auto parameter_names = loop<Parameter>(i32(), [&]() -> Parameter {
-      return {str(), initial_parameter_values[i32()]};
+    synth.parameter_value = loop<float>(P, f32);
+    synth.parameter_name = loop<Parameter>(i32(), [&]() -> Parameter {
+      return {str(), synth.parameter_value[i32()]};
     });
-
-    auto ugen_spec = loop<UGen>(i32(), [&]() -> UGen {
-      announce("UGen");
+    synth.ugen = loop<UGen>(i32(), [&]() -> UGen {
       UGen ugen;
       ugen.name = str();
-
       ugen.rate = rate[i8()];
-      say("rate");
-
-      put("number of inputs is ");
       int I = i32();
-      put("number of outputs is ");
       int O = i32();
-
-      put("special index is ");
       ugen.special_index = i16();
-
-      ugen.inputs = loop<Input>(I, [&]() -> Input { return {i32(), i32()}; });
-
-      ugen.outputs = loop<string>(O, [&]() -> string {
-        string r = rate[i8()];
-        put("output rate ");
-        say(r);
-        return r;
-      });
-
+      ugen.input = loop<Input>(I, [&]() -> Input { return {i32(), i32()}; });
+      ugen.output = loop<string>(O, [&]() -> string { return rate[i8()]; });
       return ugen;
     });
-
-    auto variant_spec = loop<Variant>(i16(), [&]() -> Variant {
+    synth.variant = loop<Variant>(i16(), [&]() -> Variant {
       Variant variant;
       variant.name = str();
-      variant.values = loop<float>(P, f32);
+      variant.value = loop<float>(P, f32);
       return variant;
     });
-
-    return SynthDef();
+    return synth;
   });
+
+  // you have a list of SynthDef!
 }
