@@ -26,25 +26,116 @@ void announce(string message) {
   ;
 }
 
+// calls a given lambda N times, gathering the result into a vector
+//
+template <typename F>
+auto gather(int N, F&& fn) {
+  using T = decltype(fn());
+  vector<T> vec;
+  for (int i = 0; i < N; ++i) vec.push_back(move(fn()));
+  return move(vec);
+}
+
+// provides a string for a given type
+// say: `type_name<decltype(expression)>()`
+//
+template <typename T>
+constexpr auto type_name() noexcept {
+  std::string_view name, prefix, suffix;
+#ifdef __clang__
+  name = __PRETTY_FUNCTION__;
+  prefix = "auto type_name() [T = ";
+  suffix = "]";
+#elif defined(__GNUC__)
+  name = __PRETTY_FUNCTION__;
+  prefix = "constexpr auto type_name() [with T = ";
+  suffix = "]";
+#elif defined(_MSC_VER)
+  name = __FUNCSIG__;
+  prefix = "auto __cdecl type_name<";
+  suffix = ">(void) noexcept";
+#endif
+  name.remove_prefix(prefix.size());
+  name.remove_suffix(suffix.size());
+  return name;
+}
+
+template <typename T>
+auto gist(vector<T> const& list) -> string {
+  string s;
+  for (auto e : list) s += e.gist();
+  return s;
+}
+template <>  // string
+auto gist(vector<string> const& list) -> string {
+  string s;
+  for (auto e : list) s += e + " ";
+  return s;
+}
+template <>  // float
+auto gist(vector<float> const& list) -> string {
+  string s;
+  for (auto e : list) s += to_string(e) + " ";
+  return s;
+}
+
+// a SynthDef data structure
+//
 struct SynthDef {
   struct Parameter {
     string name;
     float value;
+
+    string gist() {
+      string s;
+      // s += string("Parameter:");
+      s += name + "=" + to_string(value) + " ";
+      return s;
+    }
   };
+
   struct UGen {
     struct Input {
-      int a, b;
-      // XXX do better here
+      int a, b;  // XXX do better here
+
+      string gist() {
+        string s;
+        // s += "Input:";
+        s += to_string(a) + "/" + to_string(b) + " ";
+        return s;
+      }
     };
+
     string name;
     string rate;
     short special_index;
     vector<Input> input;
     vector<string> output;
+
+    string gist() {
+      string s;
+      // s += "UGen: ";
+      s += "  " + name + "." + rate + " ";
+      s += to_string(special_index) + " ";
+      s += ::gist(input);
+      s += ::gist(output);
+      s += "\n";
+      return s;
+    }
   };
+
   struct Variant {
     string name;
     vector<float> value;
+
+    string gist() {
+      string s;
+      // s += "Variant:";
+      s += name;
+      s += "/";
+      s += ::gist(value);
+      return s;
+    }
   };
 
   string name;
@@ -53,6 +144,18 @@ struct SynthDef {
   vector<Parameter> parameter_name;
   vector<UGen> ugen;
   vector<Variant> variant;
+
+  string gist() {
+    string s;
+    s += "SynthDef: ";
+    s += name + "\n";
+    s += "  constant: " + ::gist(constant) + "\n";
+    s += "  parameter_value: " + ::gist(parameter_value) + "\n";
+    s += "  parameter_name: " + ::gist(parameter_name) + "\n";
+    s += ::gist(ugen);
+    s += "  variant:" + ::gist(variant) + "\n";
+    return s;
+  }
 };
 
 struct Decode {
@@ -84,15 +187,6 @@ struct Decode {
     return c;
   };
 };
-
-template <typename F>
-auto gather(int N, F&& fn) {
-  using T = decltype(fn());
-  vector<T> vec;
-  for (int i = 0; i < N; ++i)  //
-    vec.push_back(move(fn()));
-  return move(vec);
-}
 
 int main(int argc, char* argv[]) {
   Decode decode;
@@ -142,6 +236,8 @@ int main(int argc, char* argv[]) {
   if (i32() != 2)  //
     die("incorrect version");
 
+  // it's lambdas all the way down!
+  //
   auto synthdef = gather(i16(), [&]() -> SynthDef {
     SynthDef synth;
     synth.name = str();
@@ -174,4 +270,7 @@ int main(int argc, char* argv[]) {
   });
 
   // you have a list of SynthDef!
+  for (auto s : synthdef) {
+    say(s.gist());
+  }
 }
