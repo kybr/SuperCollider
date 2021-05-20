@@ -1,5 +1,129 @@
 
 ```SuperCollider
+SynthDef("sinosc", {
+  Out.ar(0, SinOsc.ar())
+}).writeDefFile("/tmp");
+```
+
+```js
+[
+  {
+    "name": "sinosc",
+    "consts": [440, 0],
+    "paramValues": [],
+    "paramIndices": [],
+    "units": [
+      ["SinOsc", 2, 0, [[-1, 0], [-1, 1]], [2]],
+      ["Out", 2, 0, [[-1, 1], [0, 0]], []]
+    ],
+    "variants": []
+  }
+]
+```
+
+<hr />
+
+Here we use the `mul:` and `add:` on the `SinOsc`. The seems to mean that we
+get a `MulAdd`.
+
+```SuperCollider
+SynthDef("test-constants", {
+  Out.ar(1, SinOsc.ar(2, 3, 4, 5))
+}).writeDefFile("/tmp");
+```
+
+```js
+[
+  {
+    "name": "test-constants",
+    "consts":
+      [2, 3, 4, 5, 1],
+    // 0  1  2  3  4  index
+    "paramValues": [],
+    "paramIndices": [],
+    "units": [
+      ["SinOsc", 2, 0,
+        [[-1, 0], // parameter 0 comes from constant at index 0 which is 2
+        [-1, 1]], // parameter 1 comes from constant at index 1 which is 3
+        [2]], // one audio-rate output
+      ["MulAdd", 2, 0,
+        [[0, 0],  // parameter 0 comes from outlet 0 of ugen 0
+        [-1, 2],  // parameter 1 comes from constant at index 2 which is 4
+        [-1, 3]], // parameter 2 comes from constant at index 3 which is 5
+        [2]], // one audio-rate output
+      ["Out", 2, 0,
+        [[-1, 4], // parameter 0 comes from constant at index 4 which is 1
+        [1, 0]],  // parameter 1 comes from outlet 0 of ugen 1
+        []] // zero outputs
+    ],
+    "variants": []
+  }
+]
+```
+
+<hr />
+
+```SuperCollider
+SynthDef("abc", {
+  | out = 0, modulation |
+  Out.ar(out, SinOsc.ar(SinOsc.ar(0.7) + SinOsc.ar(modulation)))
+}).writeDefFile("/tmp");
+```
+
+
+```
+[
+  {
+    "name": "abc",
+    "consts": [0.699999988079071, 0],
+    "paramValues": [0, 0],
+    "paramIndices": [
+      {"name": "out", "index": 0, "length": 1},
+      {"name": "modulation", "index": 1, "length": 1}
+    ],
+    "units": [
+      /* 0 */ ["Control", 1, 0,
+        [], // zero inputs
+        [1, 1]], // two audio-rate outputs
+      /* 1 */ ["SinOsc", 2, 0,
+        [[0, 1], // parameter 0 comes from outlet 1 of ugen 0
+        [-1, 1]], // second parameter is a constant, 0
+        [2]], // one audio-rate output
+      /* 2 */ ["SinOsc", 2, 0,
+        [[-1, 0], // parameter 0 comes from constant at index 0 which is 0.7
+        [-1, 1]], // parameter 1 comes from constant at index 1 which is 0
+        [2]], //
+      /* 3 */ ["BinaryOpUGen", 2, 0,
+        [[2, 0], // parameter 0 comes from outlet 0 of ugen 2
+        [1, 0]], // parameter 1 comes from outlet 0 of ugen 1
+        [2]],
+      /* 4 */ ["SinOsc", 2, 0,
+        [[3, 0], // parameter 0 comes from outlet 0 of ugen 3
+        [-1, 1]],
+        [2]],
+      /* 5 */ ["Out", 2, 0,
+        [[0, 0],
+        [4, 0]],
+        []]
+    ],
+    "variants": []
+  }
+]
+```
+
+```
+int32 - index of unit generator or -1 for a constant
+if (unit generator index == -1)
+  int32 - index of constant
+else
+  int32 - index of unit generator output
+```
+
+
+<hr />
+
+
+```SuperCollider
 (
 SynthDef("diamond-graph", {
 	| out, max = 100, n = 300 |
@@ -73,97 +197,20 @@ SynthDef("diamond-graph", {
 
 
 ```txt
-c++ -std=c++17 decode-synthdef-file.cpp -o decode-synthdef-file
-./decode-synthdef-file diamond-graph.scsyndef
-53 43 67 66 SCgf
-00 00 00 02 int: 2
-00 01 short: 1
-64 69 61 6D 6F 6E 64 2D 67 72 61 70 68 00 00 00 05 3F 80 00 00 00 00 00 00 3E 4C CC CD 44 48 00 00 3D CC CC CD 00 00 00 03 00 00 00 00 42 C8 00 00 43 96 00 00 00 00 00 03 03 6F 75 74 00 00 00 00 03 6D 61 78 00 00 00 01 01 6E 00 00 00 02 00 00 00 07 43 6F 6E 74 72 6F 6C 01 00 00 00 00 00 00 00 03 00 00 string: iamond-graph
-01 01 01 06 int: 16843014
-4D 6F 75 73 float: 251090736.000000
-65 58 01 00 float: 63753100440244817231872.000000
-00 00 04 00 float: 0.000000
-00 00 01 00 float: 0.000000
-00 FF FF FF float: 0.000000
-FF 00 00 00 float: -170141183460469231731687303715884105728.000000
-00 00 00 00 float: 0.000000
-00 00 00 00 float: 0.000000
-01 FF FF FF float: 0.000000
-FF 00 00 00 float: -170141183460469231731687303715884105728.000000
-01 FF FF FF float: 0.000000
-FF 00 00 00 float: -170141183460469231731687303715884105728.000000
-02 01 06 53 float: 0.000000
-69 6E 4F 73 float: 18006220837249807634399232.000000
-63 02 00 00 float: 2398076729582241710080.000000
-00 02 00 00 float: 0.000000
-00 01 00 00 float: 0.000000
-00 00 00 01 float: 0.000000
-00 00 00 00 float: 0.000000
-FF FF FF FF float: nan
-00 00 00 01 float: 0.000000
-02 06 4D 75 float: 0.000000
-6C 41 64 64 float: 935187058033271064779292672.000000
-02 00 00 00 float: 0.000000
-03 00 00 00 float: 0.000000
-01 00 00 00 float: 0.000000
-00 00 02 00 float: 0.000000
-00 00 00 00 float: 0.000000
-00 00 00 00 float: 0.000000
-00 00 02 FF float: 0.000000
-FF FF FF 00 float: nan
-00 00 03 02 float: 0.000000
-06 53 69 6E float: 0.000000
-4F 73 63 02 float: 4083352064.000000
-00 00 00 02 float: 0.000000
-00 00 00 01 float: 0.000000
-00 00 00 00 float: 0.000000
-00 03 00 00 float: 0.000000
-00 00 FF FF float: 0.000000
-FF FF 00 00 float: nan
-00 01 02 06 float: 0.000000
-4D 75 6C 41 float: 257344528.000000
-64 64 02 00 float: 16824007055975414497280.000000
-00 00 03 00 float: 0.000000
-00 00 01 00 float: 0.000000
-00 00 00 00 float: 0.000000
-02 00 00 00 float: 0.000000
-00 FF FF FF float: 0.000000
-FF 00 00 00 float: -170141183460469231731687303715884105728.000000
-04 FF FF FF float: 0.000000
-FF 00 00 00 float: -170141183460469231731687303715884105728.000000
-04 02 50 69 float: 0.000000
-6E 6B 4E 6F float: 18205949426156407689142337536.000000
-69 73 65 02 float: 18390373129663304439955456.000000
-00 00 00 00 float: 0.000000
-00 00 00 01 float: 0.000000
-00 00 02 42 float: 0.000000
-69 6E 61 72 float: 18011532346621531378417664.000000
-79 4F 70 55 float: 67317738374133251166374392720523264.000000
-47 65 6E 02 float: 58734.007812
-00 00 00 02 float: 0.000000
-00 00 00 01 float: 0.000000
-00 02 00 00 float: 0.000000
-00 06 00 00 float: 0.000000
-00 00 00 00 float: 0.000000
-00 05 00 00 float: 0.000000
-00 00 02 06 float: 0.000000
-4D 75 6C 41 float: 257344528.000000
-64 64 02 00 float: 16824007055975414497280.000000
-00 00 03 00 float: 0.000000
-00 00 01 00 float: 0.000000
-00 00 00 00 float: 0.000000
-04 00 00 00 float: 0.000000
-00 FF FF FF float: 0.000000
-FF 00 00 00 float: -170141183460469231731687303715884105728.000000
-04 00 00 00 float: 0.000000
-07 00 00 00 float: 0.000000
-00 02 03 4F float: 0.000000
-75 74 02 00 float: 309316649976002257007394775105536.000000
-00 00 02 00 float: 0.000000
-00 00 00 00 float: 0.000000
-00 00 00 00 float: 0.000000
-00 00 00 00 float: 0.000000
-00 00 00 00 float: 0.000000
-08 00 00 00 float: 0.000000
-00 00 00 00 float: 0.000000
+⏿ ./decode-synthdef-file diamond-graph.scsyndef
+SynthDef: diamond-graph
+  constant: 1.000000 0.000000 0.200000 800.000000 0.100000
+  parameter_value: 0.000000 100.000000 300.000000
+  parameter_name: out=0.000000 max=100.000000 n=300.000000
+  Control.kr 0 kr kr kr
+  MouseX.kr 0 -1/0 0/1 -1/1 -1/2 kr
+  SinOsc.ar 0 1/0 -1/1 ar
+  MulAdd.ar 0 2/0 0/2 -1/3 ar
+  SinOsc.ar 0 3/0 -1/1 ar
+  MulAdd.ar 0 2/0 -1/4 -1/4 ar
+  PinkNoise.ar 0 ar
+  BinaryOpUGen.ar 2 6/0 5/0 ar
+  MulAdd.ar 0 4/0 -1/4 7/0 ar
+  Out.ar 0 0/0 8/0
+  variant:
 ```

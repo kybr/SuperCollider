@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-# npm install synthdef-json-decoder json-stringify-pretty-compact
+// npm install synthdef-json-decoder json-stringify-pretty-compact
 
 const fs = require("fs");
 const decoder = require("synthdef-json-decoder");

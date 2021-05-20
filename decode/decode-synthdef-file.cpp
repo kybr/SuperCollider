@@ -35,6 +35,10 @@ auto gather(int N, F&& fn) {
   return v;
 }
 
+auto join(string const& delimiter, vector<string> const& list) -> string {
+  return delimiter;
+}
+
 //
 // the SynthDef data structure
 //
@@ -42,12 +46,12 @@ auto gather(int N, F&& fn) {
 struct SynthDef {
   struct Parameter {
     string name;
-    float value;
+    int index;  // float value;
   };
 
   struct UGen {
     struct Input {
-      int a, b;  // XXX do better here
+      int ugen, outlet;
     };
 
     string name;
@@ -83,12 +87,14 @@ auto gist(vector<T> const& list) -> string {
 
 auto gist(vector<string> const& list) -> string {
   string s;
+  // XXX make this like join(list, delimiter)
   for (auto e : list) s += e + " ";
   return s;
 }
 
 auto gist(vector<float> const& list) -> string {
   string s;
+  // XXX make this like join(list, delimiter)
   for (auto e : list) s += to_string(e) + " ";
   return s;
 }
@@ -96,14 +102,14 @@ auto gist(vector<float> const& list) -> string {
 auto gist(SynthDef::UGen::Input const& v) -> string {
   string s;
   // s += "Input:";
-  s += to_string(v.a) + "/" + to_string(v.b) + " ";
+  s += to_string(v.ugen) + ":" + to_string(v.outlet) + " ";
   return s;
 }
 
 auto gist(SynthDef::Parameter const& v) -> string {
   string s;
   // s += string("Parameter:");
-  s += v.name + "=" + to_string(v.value) + " ";
+  s += v.name + "=" + to_string(v.index) + " ";
   return s;
 }
 
@@ -119,10 +125,11 @@ auto gist(SynthDef::Variant const& v) -> string {
 auto gist(SynthDef::UGen const& v) -> string {
   string s;
   // s += "UGen: ";
-  s += "  " + v.name + "." + v.rate + " ";
-  s += to_string(v.special_index) + " ";
+  s += "  " + v.name + "." + v.rate + "(";
   s += gist(v.input);
+  s += ") -> ";
   s += gist(v.output);
+  s += "si=" + to_string(v.special_index);
   s += "\n";
   return s;
 }
@@ -230,7 +237,7 @@ int main(int argc, char* argv[]) {
     synth.parameter_value = gather(P, f32);
 
     synth.parameter_name = gather(i32(), [&]() -> SynthDef::Parameter {
-      return {str(), synth.parameter_value[i32()]};
+      return {str(), i32()};  // synth.parameter_value[i32()]};
     });
 
     synth.ugen = gather(i32(), [&]() -> SynthDef::UGen {
